@@ -42,12 +42,26 @@ public class GroupingTransform extends DocumentTransform.DefaultDocumentTransfor
     private LinkedList<Document> documents = null;
     private Map<String,String> reverseModelMapping = null;
     
+    public Multiset<Collection<Attribute<?>>> getMultiset() {
+        return multiset;
+    }
+    
     public GroupingTransform(BaseQueryLogic<Entry<Key,Value>> logic, Collection<String> groupFieldsSet) {
         this.groupFieldsSet = new HashSet<>(groupFieldsSet);
         QueryModel model = ((ShardQueryLogic) logic).getQueryModel();
         if (model != null) {
             reverseModelMapping = model.getReverseQueryMapping();
         }
+        if (log.isTraceEnabled())
+            log.trace("groupFieldsSet:" + this.groupFieldsSet);
+    }
+    
+    public GroupingTransform(Collection<String> groupFieldsSet) {
+        this.groupFieldsSet = new HashSet<>(groupFieldsSet);
+        // QueryModel model = ((ShardQueryLogic) logic).getQueryModel();
+        // if (model != null) {
+        // reverseModelMapping = model.getReverseQueryMapping();
+        // }
         if (log.isTraceEnabled())
             log.trace("groupFieldsSet:" + this.groupFieldsSet);
     }
@@ -72,10 +86,9 @@ public class GroupingTransform extends DocumentTransform.DefaultDocumentTransfor
     @Override
     public Entry<Key,Document> flush() {
         if (documents == null) {
-            Map<String,String> markings = Maps.newHashMap();
             documents = new LinkedList<>();
             for (Collection<Attribute<?>> entry : multiset.elementSet()) {
-                ColumnVisibility vis = null;
+                ColumnVisibility vis;
                 try {
                     vis = toColumnVisibility(fieldVisibilities.get(entry));
                 } catch (Exception e) {
@@ -91,6 +104,36 @@ public class GroupingTransform extends DocumentTransform.DefaultDocumentTransfor
                 type.setDelegate(new BigDecimal(multiset.count(entry)));
                 TypeAttribute<BigDecimal> attr = new TypeAttribute<>(type, new Key("count"), true);
                 d.put("COUNT", attr);
+                documents.add(d);
+            }
+        }
+        if (!documents.isEmpty()) {
+            Document d = documents.pop();
+            return Maps.immutableEntry(d.getMetadata(), d);
+        }
+        return null;
+    }
+    
+    public Entry<Key,Document> gather() {
+        if (documents == null) {
+            documents = new LinkedList<>();
+            for (Collection<Attribute<?>> entry : multiset.elementSet()) {
+                ColumnVisibility vis;
+                try {
+                    vis = toColumnVisibility(fieldVisibilities.get(entry));
+                } catch (Exception e) {
+                    throw new IllegalStateException("Unable to merge column visibilities: " + fieldVisibilities.get(entry), e);
+                }
+                Key docKey = new Key("grouping", toString(fieldDatatypes.get(entry)) + '\u0000', "", vis, -1);
+                Document d = new Document(docKey, true);
+                
+                for (Attribute base : entry) {
+                    d.put(getFieldName(base), base);
+                }
+                // NumberType type = new NumberType();
+                // type.setDelegate(new BigDecimal(multiset.count(entry)));
+                // TypeAttribute<BigDecimal> attr = new TypeAttribute<>(type, new Key("count"), true);
+                // d.put("COUNT", attr);
                 documents.add(d);
             }
         }

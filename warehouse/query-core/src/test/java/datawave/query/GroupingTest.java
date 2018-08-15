@@ -1,5 +1,7 @@
 package datawave.query;
 
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import datawave.configuration.spring.SpringBean;
 import datawave.helpers.PrintUtility;
 import datawave.ingest.data.TypeRegistry;
@@ -33,6 +35,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import javax.inject.Inject;
+import java.io.File;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -220,9 +223,9 @@ public abstract class GroupingTest {
         BaseQueryResponse response = transformer.createResponse(eventList);
         
         // un-comment to look at the json output
-        // ObjectMapper mapper = new ObjectMapper();
-        // mapper.enable(MapperFeature.USE_WRAPPER_NAME_AS_PROPERTY_NAME);
-        // mapper.writeValue(new File("/tmp/grouped2.json"), response);
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.enable(MapperFeature.USE_WRAPPER_NAME_AS_PROPERTY_NAME);
+        mapper.writeValue(new File("/tmp/grouped2.json"), response);
         
         Assert.assertTrue(response instanceof DefaultEventQueryResponse);
         DefaultEventQueryResponse eventQueryResponse = (DefaultEventQueryResponse) response;

@@ -7,6 +7,7 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Multiset;
 import com.google.common.collect.Sets;
 import com.google.common.collect.UnmodifiableIterator;
 import datawave.data.type.Type;
@@ -14,6 +15,7 @@ import datawave.data.type.util.NumericalEncoder;
 import datawave.ingest.data.config.ingest.CompositeIngest;
 import datawave.query.Constants;
 import datawave.query.DocumentSerialization.ReturnType;
+import datawave.query.attributes.Attribute;
 import datawave.query.attributes.AttributeKeepFilter;
 import datawave.query.attributes.Document;
 import datawave.query.attributes.ValueTuple;
@@ -59,6 +61,8 @@ import datawave.query.jexl.visitors.VariableNameVisitor;
 import datawave.query.postprocessing.tf.TFFactory;
 import datawave.query.predicate.EmptyDocumentFilter;
 import datawave.query.statsd.QueryStatsDClient;
+import datawave.query.transformer.GroupingTransform;
+import datawave.query.transformer.GroupingTransformIterator;
 import datawave.query.util.EmptyContext;
 import datawave.query.util.EntryToTuple;
 import datawave.query.transformer.UniqueTransform;
@@ -77,6 +81,8 @@ import org.apache.accumulo.core.iterators.IteratorEnvironment;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
 import org.apache.accumulo.trace.instrument.Span;
 import org.apache.accumulo.trace.instrument.Trace;
+import org.apache.commons.collections4.Transformer;
+import org.apache.commons.collections4.iterators.TransformIterator;
 import org.apache.commons.jexl2.JexlArithmetic;
 import org.apache.commons.jexl2.parser.ASTJexlScript;
 import org.apache.commons.lang.builder.CompareToBuilder;
@@ -165,6 +171,8 @@ public class QueryIterator extends QueryOptions implements SortedKeyValueIterato
     protected QuerySpanCollector querySpanCollector = new QuerySpanCollector();
     
     protected UniqueTransform uniqueTransform = null;
+    
+    protected GroupingTransform groupingTransform = null;
     
     protected boolean groupingContextAddedByMe = false;
     
@@ -740,6 +748,36 @@ public class QueryIterator extends QueryOptions implements SortedKeyValueIterato
             documents = Iterators.filter(documents, uniquify.getUniquePredicate());
         }
         
+        final GroupingTransform groupify = getGroupingTransform();
+        if (groupify != null) {
+            
+//            Transformer<Entry<Key,Document>,Entry<Key,Document>> transformer = o -> groupify.apply(o);
+//            // Transformer<Entry<Key,Document>,Entry<Key,Document>> transformer = new Transformer<Entry<Key,Document>,Entry<Key,Document>>() {
+//            // @Override
+//            // public Entry<Key,Document> transform(Entry<Key,Document> o) {
+//            // return groupify.apply(o);
+//            // }
+//            // };
+//            final TransformIterator<Entry<Key,Document>,Entry<Key,Document>> transformIterator = new TransformIterator<Entry<Key,Document>,Entry<Key,Document>>(
+//                            documents, transformer) {
+//
+//                @Override
+//                public boolean hasNext() {
+//                    while (super.hasNext()) {
+//                        transformer.transform(super.next());
+//                    }
+//                    return groupify.getMultiset().size() > 0;
+//                }
+//
+//                @Override
+//                public Entry<Key,Document> next() {
+//                    return groupify.gather();
+//                }
+//            };
+            
+            documents = Iterators.concat(documents, new GroupingTransformIterator(documents, groupify));
+        }
+        
         // Filter out any Documents which are empty (e.g. due to attribute
         // projection or visibility filtering)
         if (gatherTimingDetails()) {
@@ -1302,6 +1340,17 @@ public class QueryIterator extends QueryOptions implements SortedKeyValueIterato
             }
         }
         return uniqueTransform;
+    }
+    
+    protected GroupingTransform getGroupingTransform() {
+        if (groupingTransform == null && getGroupFields() != null & !getGroupFields().isEmpty()) {
+            synchronized (getGroupFields()) {
+                if (groupingTransform == null) {
+                    groupingTransform = new GroupingTransform(getGroupFields());
+                }
+            }
+        }
+        return groupingTransform;
     }
     
 }
