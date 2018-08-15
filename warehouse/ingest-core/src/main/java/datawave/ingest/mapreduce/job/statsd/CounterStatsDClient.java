@@ -192,10 +192,9 @@ public class CounterStatsDClient {
             return delegate.getJobName();
         }
         
-        @Override
-        public boolean userClassesTakesPrecedence() {
-            return delegate.userClassesTakesPrecedence();
-        }
+        /*
+         * @Override public boolean userClassesTakesPrecedence() { return delegate.userClassesTakesPrecedence(); }
+         */
         
         @Override
         public Class<? extends InputFormat<?,?>> getInputFormatClass() throws ClassNotFoundException {
