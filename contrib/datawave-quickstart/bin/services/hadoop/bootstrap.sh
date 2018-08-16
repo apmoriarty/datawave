@@ -85,18 +85,16 @@ yarn.scheduler.capacity.node-locality-delay 40"
 export HADOOP_HOME
 export HADOOP_CONF_DIR="${HADOOP_HOME}/etc/hadoop"
 export HADOOP_LOG_DIR="${HADOOP_HOME}/logs"
-#export HADOOP_PREFIX="${HADOOP_HOME}"
 export HADOOP_YARN_HOME="${HADOOP_HOME}"
 export HADOOP_MAPRED_HOME="${HADOOP_HOME}"
 export HADOOP_PID_DIR="${DW_CLOUD_DATA}/hadoop/pids"
-export HADOOP_MAPRED_PID_DIR="${HADOOP_PID_DIR}"
 
 export PATH=${HADOOP_HOME}/bin:$PATH
 
 # Service helpers...
 
-DW_HADOOP_CMD_START="( cd ${HADOOP_HOME}/sbin && ./start-all.sh && ./mr-jobhistory-daemon.sh start historyserver )"
-DW_HADOOP_CMD_STOP="( cd ${HADOOP_HOME}/sbin && ./mr-jobhistory-daemon.sh stop historyserver &&./stop-all.sh )"
+DW_HADOOP_CMD_START="( cd ${HADOOP_HOME}/sbin && ./start-dfs.sh && ./start-yarn.sh && mapred --daemon start historyserver )"
+DW_HADOOP_CMD_STOP="( cd ${HADOOP_HOME}/sbin && mapred --daemon stop historyserver && ./stop-yarn.sh && ./stop-dfs.sh )"
 DW_HADOOP_CMD_FIND_ALL_PIDS="pgrep -f 'datanode.DataNode|namenode.NameNode|namenode.SecondaryNameNode|nodemanager.NodeManager|resourcemanager.ResourceManager|mapreduce.v2.hs.JobHistoryServer'"
 
 function hadoopIsRunning() {
