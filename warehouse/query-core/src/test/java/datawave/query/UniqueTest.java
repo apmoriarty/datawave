@@ -45,25 +45,27 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.UUID;
 
-import static datawave.query.QueryTestTableHelper.*;
+import static datawave.query.QueryTestTableHelper.MODEL_TABLE_NAME;
+import static datawave.query.QueryTestTableHelper.SHARD_INDEX_TABLE_NAME;
+import static datawave.query.QueryTestTableHelper.SHARD_TABLE_NAME;
 
 /**
- * Applies grouping to queries
+ * Applies uniqueness to queries
  * 
  */
-public abstract class GroupingTest {
-    
-    private static final Logger log = Logger.getLogger(GroupingTest.class);
-    
+public abstract class UniqueTest {
+
+    private static final Logger log = Logger.getLogger(UniqueTest.class);
+
     @RunWith(Arquillian.class)
-    public static class ShardRange extends GroupingTest {
+    public static class ShardRange extends UniqueTest {
         protected static Connector connector = null;
         private static Authorizations auths = new Authorizations("ALL");
-        
+
         @BeforeClass
         public static void setUp() throws Exception {
-            
-            QueryTestTableHelper qtth = new QueryTestTableHelper(GroupingTest.ShardRange.class.toString(), log);
+
+            QueryTestTableHelper qtth = new QueryTestTableHelper(ShardRange.class.toString(), log);
             connector = qtth.connector;
             
             WiseGuysIngest.writeItAll(connector, WiseGuysIngest.WhatKindaRange.SHARD);
@@ -73,14 +75,14 @@ public abstract class GroupingTest {
         }
         
         @Override
-        protected void runTestQueryWithGrouping(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms)
+        protected void runTestQueryWithUniqueness(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms)
                         throws Exception {
-            super.runTestQueryWithGrouping(expected, querystr, startDate, endDate, extraParms, connector);
+            super.runTestQueryWithUniqueness(expected, querystr, startDate, endDate, extraParms, connector);
         }
     }
     
     @RunWith(Arquillian.class)
-    public static class DocumentRange extends GroupingTest {
+    public static class DocumentRange extends UniqueTest {
         protected static Connector connector = null;
         private static Authorizations auths = new Authorizations("ALL");
         
@@ -98,9 +100,9 @@ public abstract class GroupingTest {
         }
         
         @Override
-        protected void runTestQueryWithGrouping(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms)
+        protected void runTestQueryWithUniqueness(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms)
                         throws Exception {
-            super.runTestQueryWithGrouping(expected, querystr, startDate, endDate, extraParms, connector);
+            super.runTestQueryWithUniqueness(expected, querystr, startDate, endDate, extraParms, connector);
         }
     }
     
@@ -144,12 +146,12 @@ public abstract class GroupingTest {
         deserializer = new KryoDocumentDeserializer();
     }
     
-    protected abstract void runTestQueryWithGrouping(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms)
+    protected abstract void runTestQueryWithUniqueness(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms)
                     throws Exception;
     
-    protected void runTestQueryWithGrouping(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms,
+    protected void runTestQueryWithUniqueness(Map<String,Integer> expected, String querystr, Date startDate, Date endDate, Map<String,String> extraParms,
                     Connector connector) throws Exception {
-        log.debug("runTestQueryWithGrouping");
+        log.debug("runTestQueryWithUniqueness");
         
         QueryImpl settings = new QueryImpl();
         settings.setBeginDate(startDate);
@@ -208,7 +210,7 @@ public abstract class GroupingTest {
     }
     
     @Test
-    public void testGrouping() throws Exception {
+    public void testUniqueness() throws Exception {
         Map<String,String> extraParameters = new HashMap<>();
         extraParameters.put("include.grouping.context", "true");
         
@@ -227,20 +229,20 @@ public abstract class GroupingTest {
         expectedMap.put("MALE-24", 1);
         expectedMap.put("MALE-22", 2);
         
-        extraParameters.put("group.fields", "AG,GEN");
+        extraParameters.put("unique.fields", "AG,GEN");
         
-        runTestQueryWithGrouping(expectedMap, queryString, startDate, endDate, extraParameters);
+        runTestQueryWithUniqueness(expectedMap, queryString, startDate, endDate, extraParameters);
     }
 
     @Test
-    public void testGroupingUsingFunction() throws Exception {
+    public void testUniquenessUsingFunction() throws Exception {
         Map<String,String> extraParameters = new HashMap<>();
         extraParameters.put("include.grouping.context", "true");
 
         Date startDate = format.parse("20091231");
         Date endDate = format.parse("20150101");
 
-        String queryString = "UUID =~ '^[CS].*' && f:groupby('AG','GEN')";
+        String queryString = "UUID =~ '^[CS].*' && f:unique('AG','GEN')";
 
         Map<String,Integer> expectedMap = new HashMap<>();
         expectedMap.put("FEMALE-18", 2);
@@ -252,7 +254,7 @@ public abstract class GroupingTest {
         expectedMap.put("MALE-24", 1);
         expectedMap.put("MALE-22", 2);
 
-        runTestQueryWithGrouping(expectedMap, queryString, startDate, endDate, extraParameters);
+        runTestQueryWithUniqueness(expectedMap, queryString, startDate, endDate, extraParameters);
     }
 
 }
