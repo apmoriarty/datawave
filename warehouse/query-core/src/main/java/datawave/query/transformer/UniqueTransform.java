@@ -4,6 +4,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnel;
@@ -22,8 +23,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import org.apache.accumulo.core.data.ArrayByteSequence;
 import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
@@ -39,6 +42,9 @@ import java.util.HashSet;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
+
+import static io.protostuff.CollectionSchema.MessageFactories.HashSet;
+import static org.geotools.gml3.v3_2.GML.group;
 
 /**
  * This is a iterator that will filter documents base on a uniqueness across a set of configured fields. Only the first instance of an event with a unique set
@@ -218,39 +224,48 @@ public class UniqueTransform extends DocumentTransform.DefaultDocumentTransform 
             }
         }
 
-        // pull out the fields that had no grouping context
-        Multimap<String, String> noGroupingContextSet = mapGroupingContextToField.remove("");
-
         // combine grouped sets that are mutually exclusive
-        Set<Multimap<String, String>> sets = new HashSet<>();
-        for (String groupingContext : new HashSet<>(mapGroupingContextToField.keySet())) {
-            Multimap<String, String> group = mapGroupingContextToField.remove(groupingContext);
-            boolean combined = false;
-            for (Multimap<String, String> otherGroup : mapGroupingContextToField.values()) {
-                if (!intersects(group.keySet(), otherGroup.keySet())) {
-                    otherGroup.putAll(group);
-                    combined = true;
+        Set<Multimap<String, String>> set1 = new HashSet<>(mapGroupingContextToField.values());
+        Set<Multimap<String, String>> set2 = new HashSet<>(set1);
+        Set<Multimap<String, String>> combined = multiply(set1, set2);
+
+        // anything left in set1 can be considered part of the final results
+        Set<Multimap<String, String>> results = set1;
+
+        // now continue multiplying until nothing changes
+        while(!combined.isEmpty()) {
+            set1 = combined;
+            set2 = new HashSet<>(mapGroupingContextToField.values());
+            combined = multiply(set1, set2);
+            results.addAll(set1);
+        }
+        return results;
+    }
+
+    /**
+     * Multiply set1 and set2 by combining those in set1 are mutually exclusive with those in set2.  Those left remaining in set1
+     * are those entries that could not be combined with anything in set2
+     * @param set1
+     * @param set1
+     * @return the multiplication
+     */
+    private Set<Multimap<String, String>> multiply(Set<Multimap<String, String>> set1, Set<Multimap<String, String>> set2) {
+        Set<Multimap<String, String>> combined = new HashSet<>();
+        for (Iterator<Multimap<String, String>> it = set1.iterator(); it.hasNext(); ) {
+            Multimap<String, String> entry = it.next();
+
+            for (Multimap<String, String> other : set2) {
+                if (entry == other) {
+
+                } else if (!intersects(entry.keySet(), other.keySet())) {
+                    Multimap<String,String> combinedFields = HashMultimap.create(entry);
+                    combinedFields.putAll(other);
+                    combined.add(combinedFields);
+                    it.remove();
                 }
             }
-            // if this group did not get combined with any other, then it is a final set
-            if (!combined) {
-                sets.add(group);
-            }
         }
-
-        // now for each field with an empty grouping context, distribute it across all of the other groups
-        if (noGroupingContextSet != null && !noGroupingContextSet.isEmpty()) {
-            for (String field : noGroupingContextSet.keySet()) {
-                for (Multimap<String, String> group : mapGroupingContextToField.values()) {
-                    if (!group.containsKey(field)) {
-                        group.putAll(field, noGroupingContextSet.get(field));
-                    }
-                }
-            }
-
-        }
-
-        return sets;
+        return combined;
     }
 
     private boolean intersects(Set<String> set1, Set<String> set2) {
@@ -286,7 +301,8 @@ public class UniqueTransform extends DocumentTransform.DefaultDocumentTransform 
     private String getGroupingContext(String documentField) {
         int index = documentField.indexOf('.');
         if (index < 0) {
-            return "";
+            // if the field does not have a grouping context, then it is its own group
+            return documentField + ".ungrouped";
         } else {
             return documentField.substring(index+1);
         }
