@@ -982,12 +982,13 @@ public class QueryIterator extends QueryOptions implements YieldingKeyValueItera
             final Iterator<Tuple3<Key,Document,Map<String,Object>>> itrWithContext;
             if (this.isTermFrequenciesRequired()) {
                 
-                // The TFFunction can only prune non index-only fields
-                Set<String> tfIndexOnlyFields = Sets.intersection(getTermFrequencyFields(), getIndexOnlyFields());
+                // First source fetches term offsets
+                SortedKeyValueIterator<Key,Value> firstSource = sourceDeepCopy.deepCopy(myEnvironment);
+                // Second source fetches tf field value pairs from the field index for delayed (negated) phrases
+                SortedKeyValueIterator<Key,Value> secondSource = sourceDeepCopy.deepCopy(myEnvironment);
                 
-                Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> tfFunction;
-                tfFunction = TFFactory.getFunction(getScript(documentSource), getContentExpansionFields(), getTermFrequencyFields(), this.getTypeMetadata(),
-                                super.equality, getEvaluationFilter(), sourceDeepCopy.deepCopy(myEnvironment), tfIndexOnlyFields);
+                Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> tfFunction = buildTfFunction(getScript(documentSource), firstSource,
+                                secondSource);
                 
                 itrWithContext = TraceIterators.transform(tupleItr, tfFunction, "Term Frequency Lookup");
             } else {
@@ -1023,6 +1024,12 @@ public class QueryIterator extends QueryOptions implements YieldingKeyValueItera
             log.trace("Evaluation is disabled, not instantiating Jexl evaluation logic");
         }
         return documents;
+    }
+    
+    protected Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> buildTfFunction(ASTJexlScript script,
+                    SortedKeyValueIterator<Key,Value> source, SortedKeyValueIterator<Key,Value> secondSource) {
+        return TFFactory.getFunction(script, getContentExpansionFields(), getTermFrequencyFields(), this.getTypeMetadata(), super.equality,
+                        getEvaluationFilter(), source, secondSource, false);
     }
     
     private Range getDocumentRange(NestedQueryIterator<Key> documentSource) {

@@ -5,6 +5,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import datawave.query.function.Equality;
+import datawave.query.jexl.visitors.IteratorBuildingVisitor;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
@@ -22,11 +23,13 @@ import datawave.query.util.Tuple3;
 import datawave.query.util.TypeMetadata;
 
 public class TFFactory {
+    
     private static final Logger log = Logger.getLogger(TFFactory.class);
     
     public static com.google.common.base.Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> getFunction(ASTJexlScript query,
                     Set<String> contentExpansionFields, Set<String> termFrequencyFields, TypeMetadata typeMetadata, Equality equality,
-                    EventDataQueryFilter evaluationFilter, SortedKeyValueIterator<Key,Value> sourceCopy, Set<String> tfIndexOnlyFields) {
+                    EventDataQueryFilter evaluationFilter, SortedKeyValueIterator<Key,Value> sourceCopy, SortedKeyValueIterator<Key,Value> secondSource,
+                    boolean isTld) {
         
         Multimap<String,Class<? extends Type<?>>> fieldMappings = LinkedListMultimap.create();
         for (Entry<String,String> dataType : typeMetadata.fold().entries()) {
@@ -40,20 +43,25 @@ public class TFFactory {
             
         }
         
-        return getFunction(query, contentExpansionFields, termFrequencyFields, fieldMappings, equality, evaluationFilter, sourceCopy, tfIndexOnlyFields);
+        return getFunction(query, contentExpansionFields, termFrequencyFields, fieldMappings, equality, evaluationFilter, sourceCopy, secondSource, isTld);
     }
     
     /**
      * Factory method for creating the TF function used for generating the map context.
      * 
      * @param query
+     *            the query tree
      * @param dataTypes
      * @param sourceDeepCopy
+     *            a source copy used to fetch term frequencies
+     * @param secondSource
+     *            a source copy used to fetch delayed values from the field index (negated content function terms)
      * @return
      */
     public static com.google.common.base.Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> getFunction(ASTJexlScript query,
                     Set<String> contentExpansionFields, Set<String> termFrequencyFields, Multimap<String,Class<? extends Type<?>>> dataTypes,
-                    Equality equality, EventDataQueryFilter evaluationFilter, SortedKeyValueIterator<Key,Value> sourceDeepCopy, Set<String> tfIndexOnlyFields) {
+                    Equality equality, EventDataQueryFilter evaluationFilter, SortedKeyValueIterator<Key,Value> sourceDeepCopy,
+                    SortedKeyValueIterator<Key,Value> secondSource, boolean isTld) {
         
         Multimap<String,String> termFrequencyFieldValues = TermOffsetPopulator.getTermFrequencyFieldValues(query, contentExpansionFields, termFrequencyFields,
                         dataTypes);
@@ -61,8 +69,8 @@ public class TFFactory {
         if (termFrequencyFieldValues.isEmpty()) {
             return new EmptyTermFrequencyFunction();
         } else {
-            return new TermOffsetFunction(new TermOffsetPopulator(termFrequencyFieldValues, contentExpansionFields, evaluationFilter, sourceDeepCopy),
-                            tfIndexOnlyFields);
+            return new TermOffsetFunction(new TermOffsetPopulator(termFrequencyFieldValues, contentExpansionFields, evaluationFilter, sourceDeepCopy), query,
+                            secondSource, isTld);
         }
     }
 }
