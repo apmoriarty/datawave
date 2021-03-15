@@ -404,7 +404,7 @@ public class TermFrequencyHitFunctionTest {
     
     @Test
     public void testDelayedContentFunction() throws ParseException {
-        String query = "((ASTDelayedPredicate = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
+        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
         ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
         
         Multimap<String,String> fieldValues = HashMultimap.create();
@@ -421,7 +421,7 @@ public class TermFrequencyHitFunctionTest {
     // Exclude hit is in tld
     @Test
     public void testNegatedContentFunction_ExcludeInTld() throws ParseException {
-        String query = "((ASTDelayedPredicate = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
+        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
         ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
         
         Multimap<String,String> fieldValues = HashMultimap.create();
@@ -438,7 +438,7 @@ public class TermFrequencyHitFunctionTest {
     // Exclude hit is in uid.1
     @Test
     public void testNegatedContentFunction_ExcludeInChildDoc() throws ParseException {
-        String query = "((ASTDelayedPredicate = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
+        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
         ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
         
         Multimap<String,String> fieldValues = HashMultimap.create();
