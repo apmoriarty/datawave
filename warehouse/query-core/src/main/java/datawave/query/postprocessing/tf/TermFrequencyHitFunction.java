@@ -55,6 +55,7 @@ public class TermFrequencyHitFunction {
     // The field\0value pairs that define a functions search space. Used to filter the document.
     private final Multimap<Function,String> functionSearchSpace = HashMultimap.create();
     
+    // Parse functions once
     private final Map<Function,FunctionArgs> functionArgsCache = new HashMap<>();
     
     // If a content function does not have a field in it's argument list, fall back to this map.
@@ -73,6 +74,13 @@ public class TermFrequencyHitFunction {
     // Determines how the seek range for the field index is built, i.e., should it consider child documents
     private boolean isTld = false;
     
+    /**
+     *
+     * @param script
+     *            the parsed query tree
+     * @param tfFVs
+     *            a multimap of term frequency fields to values
+     */
     public TermFrequencyHitFunction(ASTJexlScript script, Multimap<String,String> tfFVs) {
         this.tfFVs = tfFVs;
         populateFunctionSearchSpace(script);
@@ -86,6 +94,7 @@ public class TermFrequencyHitFunction {
         this.isTld = isTld;
     }
     
+    // used to perform a lazy init
     private void initializeSource() throws IOException {
         iter = new DelayedFieldIndexIterator();
         iter.init(source, null, null);
@@ -218,6 +227,18 @@ public class TermFrequencyHitFunction {
         }
     }
     
+    /**
+     * Given a document attribute determine which values exist within the function search space.
+     *
+     * @param field
+     *            the field
+     * @param attribute
+     *            an attribute from a document
+     * @param documentHits
+     *            tracks the value-field hits for a given field
+     * @param vfUidCache
+     *            tracks the uid hits for a given value-field
+     */
     private void buildSearchSpaceFromDocument(String field, Attribute<?> attribute, Multimap<String,String> documentHits, Multimap<String,String> vfUidCache) {
         if (attribute instanceof Attributes) {
             Attributes attrs = (Attributes) attribute;
@@ -349,6 +370,7 @@ public class TermFrequencyHitFunction {
      *            the value
      * @return true if this field value pair contained entries in the field index
      * @throws IOException
+     *             if an error occurred while fetching keys off the field index
      */
     private boolean fetchKeysForFieldValue(List<Attribute<?>> fetched, Range limitRange, String field, String value) throws IOException {
         
@@ -548,9 +570,9 @@ public class TermFrequencyHitFunction {
         }
         
         // Parse the values first. Might have to lookup fields by value.
-        Set<String> values = getValuesFromArgs(args, index);
+        TreeSet<String> values = getValuesFromArgs(args, index);
         
-        Set<String> fields;
+        TreeSet<String> fields;
         if (specialCase) {
             // field(s) were not present in the function, lookup fields by value.
             fields = lookupFieldsByValues(values);
@@ -569,8 +591,8 @@ public class TermFrequencyHitFunction {
     }
     
     // If a function does not contain the fields being queried, find the fields via the term frequency field-value map
-    private Set<String> lookupFieldsByValues(Set<String> values) {
-        Set<String> fields = new HashSet<>();
+    private TreeSet<String> lookupFieldsByValues(Set<String> values) {
+        TreeSet<String> fields = new TreeSet<>();
         for (String key : tfFVs.keySet()) {
             for (String value : values) {
                 if (tfFVs.containsEntry(key, value)) {
@@ -587,15 +609,20 @@ public class TermFrequencyHitFunction {
             return true;
         } else if (node instanceof ASTReference) {
             List<ASTIdentifier> ids = JexlASTHelper.getIdentifiers(node);
-            if (ids.size() == 1 && ids.get(0).image.equals("termOffsetMap")) {
-                return true;
-            }
+            return ids.size() == 1 && ids.get(0).image.equals("termOffsetMap");
         }
         return false;
     }
     
-    private Set<String> parseField(JexlNode node) {
-        Set<String> fields = new HashSet<>();
+    /**
+     * Extract fields from a JexlNode. Node may be an OR node like (FIELD_A || FIELD_B).
+     *
+     * @param node
+     *            a jexl node
+     * @return a sorted set of fields
+     */
+    private TreeSet<String> parseField(JexlNode node) {
+        TreeSet<String> fields = new TreeSet<>();
         List<ASTIdentifier> identifiers = JexlASTHelper.getIdentifiers(node);
         for (ASTIdentifier identifier : identifiers) {
             fields.add(identifier.image);
@@ -612,8 +639,8 @@ public class TermFrequencyHitFunction {
      *            the start index for the values
      * @return a list of normalized string values
      */
-    private Set<String> getValuesFromArgs(List<JexlNode> args, int start) {
-        Set<String> values = new HashSet<>();
+    private TreeSet<String> getValuesFromArgs(List<JexlNode> args, int start) {
+        TreeSet<String> values = new TreeSet<>();
         for (int i = start; i < args.size(); i++) {
             List<String> parsed = parseArg(args.get(i));
             values.addAll(parsed);
@@ -637,10 +664,10 @@ public class TermFrequencyHitFunction {
     // utility class
     private class FunctionArgs {
         boolean isNegated;
-        Set<String> fields;
-        Set<String> values;
+        TreeSet<String> fields;
+        TreeSet<String> values;
         
-        public FunctionArgs(boolean isNegated, Set<String> fields, Set<String> values) {
+        public FunctionArgs(boolean isNegated, TreeSet<String> fields, TreeSet<String> values) {
             this.isNegated = isNegated;
             this.fields = fields;
             this.values = values;

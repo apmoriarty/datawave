@@ -26,450 +26,546 @@ import static org.junit.Assert.assertEquals;
 
 public class TermFrequencyHitFunctionTest {
     
-    // Document fully satisfies the function
-    @Test
-    public void testWithin_fullHit() throws ParseException {
-        String query = "content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT", Arrays.asList("quick", "brown", "fox"));
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
+    // phrase functions
     
     @Test
-    public void testWithin_halfHit() throws ParseException {
-        String query = "(content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox') || \n"
-                        + "(content:within(TEXT, 3,'lazy','dog') && (TEXT == 'lazy' && TEXT == 'dog'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT", Arrays.asList("quick", "brown", "fox"));
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testWithin_partialHitExcluded() throws ParseException {
-        String query = "(content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox') || \n"
-                        + "(content:within(TEXT, 3, termOffsetMap, 'lazy','dog') && (TEXT == 'lazy' && TEXT == 'dog'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT", Arrays.asList("quick", "brown", "fox", "the", "lazy"));
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    // content:within(TEXT_A || TEXT_B, within, termOffsetMap, values...)
-    @Test
-    public void testWithin_dualFieldFunction_excludeOneField() throws ParseException {
-        String query = "(content:within((TEXT_A || TEXT_B), 3, termOffsetMap, 'quick', 'fox') && ((TEXT_A == 'quick' && TEXT_A == 'fox') || (TEXT_B == 'quick' && TEXT_B == 'fox')))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT_A", Arrays.asList("quick", "brown", "fox", "the", "lazy"));
-        fieldValues.put("TEXT_B", "fox"); // absence of {TEXT_B,'quick'} causes TEXT_B to be dropped from the hit fields
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT_A"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT_A"));
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testAdjacent_fullHit() throws ParseException {
-        String query = "content:adjacent(TEXT, termOffsetMap, 'brown', 'fox') && TEXT == 'brown' && TEXT == 'fox'";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT", Arrays.asList("quick", "brown", "fox"));
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testAdjacent_halfHit() throws ParseException {
-        String query = "(content:adjacent(TEXT, termOffsetMap, 'brown', 'fox') && (TEXT == 'brown' && TEXT == 'fox')) || \n"
-                        + "(content:adjacent(TEXT, termOffsetMap, 'red', 'dog') && (TEXT == 'red' && TEXT == 'dog'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT", Arrays.asList("quick", "brown", "fox"));
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testAdjacent_partialHitExcluded() throws ParseException {
-        String query = "(content:adjacent(TEXT, termOffsetMap, 'brown', 'fox') && TEXT == 'brown' && TEXT == 'fox') || \n"
-                        + "(content:adjacent(TEXT, 'fox','two') && (TEXT == 'fox' && TEXT == 'two'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT", Arrays.asList("quick", "brown", "fox", "the", "lazy"));
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    // content:phrase(TEXT_A || TEXT_B, adjacent, termOffsetMap, value_a, value_b)
-    @Test
-    public void testAdjacent_dualFieldFunction_excludeOneField() throws ParseException {
-        String query = "(content:adjacent((TEXT_A || TEXT_B), termOffsetMap, 'quick', 'fox') && ((TEXT_A == 'quick' && TEXT_A == 'fox') || (TEXT_B == 'quick' && TEXT_B == 'fox')))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT_A", "quick");
-        fieldValues.put("TEXT_A", "brown");
-        fieldValues.put("TEXT_A", "fox");
-        fieldValues.put("TEXT_A", "the");
-        fieldValues.put("TEXT_A", "lazy");
-        fieldValues.put("TEXT_B", "fox"); // absence of {TEXT_B,'quick'} causes TEXT_B to be dropped from the hit fields
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT_A"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT_A"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testPhrase_fullHit() throws ParseException {
-        String query = "(content:phrase(TEXT, termOffsetMap, 'quick','brown','fox') && (TEXT == 'quick' && TEXT == 'brown' && TEXT == 'fox'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT", "quick");
-        fieldValues.put("TEXT", "brown");
-        fieldValues.put("TEXT", "fox");
-        fieldValues.put("TEXT", "lazy");
-        fieldValues.put("TEXT", "dog");
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testPhrase_halfHit() throws ParseException {
-        String query = "(content:phrase(TEXT, termOffsetMap, 'quick', 'brown', 'fox') && (TEXT == 'quick' && TEXT == 'brown' && TEXT == 'fox')) || \n"
-                        + "(content:phrase(TEXT, termOffsetMap, 'the', 'lazy', 'dog') && (TEXT == 'the' && TEXT == 'lazy' && TEXT == 'dog'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT", "quick");
-        fieldValues.put("TEXT", "brown");
-        fieldValues.put("TEXT", "fox");
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testPhrase_partialHitExcluded() throws ParseException {
-        String query = "(content:phrase(TEXT, termOffsetMap, 'quick', 'brown', 'fox') && (TEXT == 'quick' && TEXT == 'brown' && TEXT == 'fox')) || \n"
-                        + "(content:phrase(TEXT, termOffsetMap, 'the', 'lazy', 'dog') && (TEXT == 'the' && TEXT == 'lazy' && TEXT == 'dog'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT", "quick");
-        fieldValues.put("TEXT", "brown");
-        fieldValues.put("TEXT", "fox");
-        fieldValues.put("TEXT", "the");
-        fieldValues.put("TEXT", "lazy"); // absence of 'dog' prunes second phrase
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    // content:phrase(TEXT, A, A, B)
-    @Test
-    public void testPhrase_repeatedTerm() throws ParseException {
-        String query = "(content:phrase(TEXT, termOffsetMap, 'knock', 'knock') && (TEXT == 'knock'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT", "it's");
-        fieldValues.put("TEXT", "a");
-        fieldValues.put("TEXT", "knock");
-        fieldValues.put("TEXT", "knock");
-        fieldValues.put("TEXT", "joke"); // absence of 'dog' prunes second phrase
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0knock\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    // content:phrase(TEXT_A || TEXT_B, adjacent, termOffsetMap, value_a, value_b)
-    @Test
-    public void testPhrase_dualFieldFunction_excludeOneField() throws ParseException {
-        String query = "(content:phrase((TEXT_A || TEXT_B), termOffsetMap, 'quick','brown','fox') && "
-                        + "((TEXT_A == 'quick' && TEXT_A == 'brown' && TEXT_A == 'fox') || (TEXT_B == 'quick' && TEXT_B == 'brown' && TEXT_B == 'fox')))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT_A", "quick");
-        fieldValues.put("TEXT_A", "brown");
-        fieldValues.put("TEXT_A", "fox");
-        fieldValues.put("TEXT_A", "lazy");
-        fieldValues.put("TEXT_A", "dog");
-        fieldValues.put("TEXT_B", "brown");
-        fieldValues.put("TEXT_B", "dog");
-        fieldValues.put("TEXT_B", "fox");
-        fieldValues.put("TEXT_B", "two");
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT_A"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT_A"));
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT_A"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testPhraseAndAdjacent_bothHit() throws ParseException {
-        String query = "(content:phrase(TEXT, termOffsetMap, 'quick','brown','fox') && (TEXT == 'quick' && TEXT == 'brown' && TEXT == 'fox')) || \n"
-                        + "(content:adjacent(TEXT, termOffsetMap, 'lazy','dog') && (TEXT == 'lazy' && TEXT == 'dog'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT", "quick");
-        fieldValues.put("TEXT", "brown");
-        fieldValues.put("TEXT", "fox");
-        fieldValues.put("TEXT", "lazy");
-        fieldValues.put("TEXT", "dog");
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0lazy\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0dog\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    @Test
-    public void testIntersectingChildren() throws ParseException {
-        String query = "(content:phrase(TEXT, termOffsetMap, 'brown','fox') && (TEXT == 'quick' && TEXT == 'fox'))";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        // brown hits on uid0, uid1. fox hits on uid1, uid2.
-        Document doc = buildDocumentWithIntersectingChildren();
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid1\0brown\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid1\0fox\0TEXT"));
-        
-        test(script, doc, expectedHits);
-    }
-    
-    // Test a hit on numeric, no-op
-    @Test
-    public void testHitsAgainstMultipleTypes() throws ParseException {
-        
-        String query = "content:phrase(TEXT, termOffsetMap, '1', 'ping', 'only') && TEXT == '1' && TEXT == 'ping' && TEXT == 'only'";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT", "1");
-        fieldValues.put("TEXT", "ping");
-        fieldValues.put("TEXT", "only");
-        
-        Key docKey = new Key("shard", "datatype\0uid0");
-        Document doc = buildDocument(fieldValues);
-        
-        TermFrequencyHitFunction hitFunction = new TermFrequencyHitFunction(script, fieldValues);
-        TreeSet<Text> hits = hitFunction.apply(docKey, doc);
-        
-        // Expected hits
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\u0000uid0\u00001\u0000TEXT"));
-        expectedHits.add(new Text("datatype\u0000uid0\u0000ping\u0000TEXT"));
-        expectedHits.add(new Text("datatype\u0000uid0\u0000only\u0000TEXT"));
-        
-        assertEquals(expectedHits, hits);
-    }
-    
-    @Test
-    public void testFunction() throws ParseException {
-        String query = "content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("TEXT", "quick");
-        fieldValues.put("TEXT", "brown");
-        fieldValues.put("TEXT", "fox");
-        fieldValues.put("TEXT", "the");
-        fieldValues.put("TEXT", "lazy");
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TermFrequencyHitFunction hitFunction = new TermFrequencyHitFunction(script, fieldValues);
-        Key docKey = new Key("shard", "datatype\0uid0");
-        TreeSet<Text> hits = hitFunction.apply(docKey, doc);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        
-        assertEquals(expectedHits, hits);
-    }
-    
-    @Test
-    public void testFunction_fieldNotInFunction() throws ParseException {
-        String query = "content:within(3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'";
-        ASTJexlScript script = JexlASTHelper.parseAndFlattenJexlQuery(query);
-        
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.putAll("TEXT", Arrays.asList("quick", "brown", "fox", "the", "lazy"));
-        
-        Document doc = buildDocument(fieldValues);
-        
-        TermFrequencyHitFunction hitFunction = new TermFrequencyHitFunction(script, fieldValues);
-        Key docKey = new Key("shard", "datatype\0uid0");
-        TreeSet<Text> hits = hitFunction.apply(docKey, doc);
-        
-        TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        
-        assertEquals(expectedHits, hits);
-    }
-    
-    @Test
-    public void testDelayedContentFunction() throws ParseException {
-        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
+    public void test_phraseFunction_eventQuery_includeOnly() throws ParseException {
+        String query = "content:phrase(TEXT, termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house'";
         ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
         
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("FOO", "bar");
-        Document doc = buildDocument(fieldValues);
-        
         TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
         
-        test(script, doc, expectedHits, createSource());
+        test(script, buildDocument(), expectedHits, buildSource());
     }
     
-    // Exclude hit is in tld
     @Test
-    public void testNegatedContentFunction_ExcludeInTld() throws ParseException {
-        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
+    public void test_phraseFunction_tldQuery_includeOnly() throws ParseException {
+        String query = "content:phrase(TEXT, termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house'";
         ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
         
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("FOO", "bar");
-        Document doc = buildDocument(fieldValues);
-        
         TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
         
-        test(script, doc, expectedHits, createSource());
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
     }
     
-    // Exclude hit is in uid.1
     @Test
-    public void testNegatedContentFunction_ExcludeInChildDoc() throws ParseException {
-        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'quick', 'fox') && TEXT == 'quick' && TEXT == 'fox'))";
+    public void test_phraseFunction_eventQuery_includeExclude() throws ParseException {
+        String query = "(content:phrase(TEXT, termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house') && "
+                        + "((_Delayed_ = true) && (content:phrase(TEXT, termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
         ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
         
-        Multimap<String,String> fieldValues = HashMultimap.create();
-        fieldValues.put("FOO", "bar");
-        Document doc = buildDocument(fieldValues);
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
         
-        List<Map.Entry<Key,Value>> fiData = new ArrayList<>();
-        fiData.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "fox\0datatype\0uid0.1"), new Value()));
-        fiData.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "quick\0datatype\0uid0.1"), new Value()));
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_phraseFunction_tldQuery_includeExclude() throws ParseException {
+        String query = "(content:phrase(TEXT, termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house') && "
+                        + "((_Delayed_ = true) && (content:phrase(TEXT, termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
         
         TreeSet<Text> expectedHits = new TreeSet<>();
-        expectedHits.add(new Text("datatype\0uid0.1\0quick\0TEXT"));
-        expectedHits.add(new Text("datatype\0uid0.1\0fox\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
         
-        test(script, doc, expectedHits, createSource(fiData), true);
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
     }
     
-    private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected) {
-        test(script, doc, expected, false);
+    @Test
+    public void test_phraseFunction_tldQuery_includeExclude_differentDocs() throws ParseException {
+        String query = "(content:phrase(TEXT, termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house') && "
+                        + "((_Delayed_ = true) && (content:phrase(TEXT, termOffsetMap, 'orange', 'oatmeal') && TEXT == 'orange' && TEXT == 'oatmeal'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0orange\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0oatmeal\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
     }
     
-    private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected, boolean isTld) {
-        test(script, doc, expected, null, isTld);
+    @Test
+    public void test_phraseFunction_eventQuery_excludeOnly() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:phrase(TEXT, 3, termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_phraseFunction_tldQuery_excludeOnly() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:phrase(TEXT, 3, termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    // adjacency functions
+    
+    @Test
+    public void test_adjacencyFunction_eventQuery_includeOnly() throws ParseException {
+        String query = "content:adjacent(TEXT, termOffsetMap, 'red', 'car') && TEXT == 'red' && TEXT == 'car'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0red\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0car\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_adjacencyFunction_tldQuery_includeOnly() throws ParseException {
+        String query = "content:adjacent(TEXT, termOffsetMap, 'red', 'car') && TEXT == 'red' && TEXT == 'car'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.1\0red\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0car\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void test_adjacencyFunction_eventQuery_includeExclude() throws ParseException {
+        String query = "(content:adjacent(TEXT, termOffsetMap, 'red', 'car') && TEXT == 'red' && TEXT == 'car') && "
+                        + "((_Delayed_ = true) && (content:adjacent(TEXT, termOffsetMap, 'orange', 'oatmeal') && TEXT == 'orange' && TEXT == 'oatmeal'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0red\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0car\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0orange\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0oatmeal\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_adjacencyFunction_tldQuery_includeExclude() throws ParseException {
+        String query = "(content:adjacent(TEXT, termOffsetMap, 'red', 'car') && TEXT == 'red' && TEXT == 'car') && "
+                        + "((_Delayed_ = true) && (content:adjacent(TEXT, termOffsetMap, 'orange', 'oatmeal') && TEXT == 'orange' && TEXT == 'oatmeal'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.1\0red\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0car\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0orange\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0oatmeal\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void test_adjacencyFunction_tldQuery_includeExclude_differentDocs() throws ParseException {
+        String query = "(content:adjacent(TEXT, termOffsetMap, 'red', 'car') && TEXT == 'red' && TEXT == 'car') && "
+                        + "((_Delayed_ = true) && (content:adjacent(TEXT, termOffsetMap, 'green', 'grass') && TEXT == 'green' && TEXT == 'grass'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.1\0red\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0car\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0green\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0grass\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void test_adjacencyFunction_eventQuery_excludeOnly() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:adjacent(TEXT, termOffsetMap, 'orange', 'oatmeal') && TEXT == 'orange' && TEXT == 'oatmeal'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0orange\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0oatmeal\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_adjacencyFunction_tldQuery_excludeOnly() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:phrase(TEXT, termOffsetMap, 'orange', 'oatmeal') && TEXT == 'orange' && TEXT == 'oatmeal'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.1\0orange\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0oatmeal\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    // within functions
+    
+    @Test
+    public void test_withinFunction_eventQuery_includeOnly() throws ParseException {
+        String query = "content:within(TEXT, 2, termOffsetMap, 'yellow', 'bus') && TEXT == 'yellow' && TEXT == 'bus'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0yellow\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0bus\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_withinFunction_tldQuery_includeOnly() throws ParseException {
+        String query = "content:within(TEXT, 2, termOffsetMap, 'yellow', 'bus') && TEXT == 'yellow' && TEXT == 'bus'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.2\0yellow\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0bus\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void test_withinFunction_eventQuery_includeExclude() throws ParseException {
+        String query = "(content:within(TEXT, 3, termOffsetMap, 'yellow', 'bus') && TEXT == 'yellow' && TEXT == 'bus') && "
+                        + "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'green', 'grass') && TEXT == 'green' && TEXT == 'grass'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0yellow\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0bus\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0green\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0grass\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_withinFunction_tldQuery_includeExclude() throws ParseException {
+        String query = "(content:within(TEXT, 3, termOffsetMap, 'yellow', 'bus') && TEXT == 'yellow' && TEXT == 'bus') && "
+                        + "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'green', 'grass') && TEXT == 'green' && TEXT == 'grass'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.2\0yellow\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0bus\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0green\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0grass\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void test_withinFunction_tldQuery_includeExclude_differentDocs() throws ParseException {
+        String query = "(content:within(TEXT, 3, termOffsetMap, 'yellow', 'bus') && TEXT == 'yellow' && TEXT == 'bus') && "
+                        + "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.2\0yellow\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0bus\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void test_withinFunction_eventQuery_excludeOnly() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'green', 'grass') && TEXT == 'green' && TEXT == 'grass'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0green\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0grass\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    @Test
+    public void test_withinFunction_tldQuery_excludeOnly() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'green', 'grass') && TEXT == 'green' && TEXT == 'grass'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.2\0green\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0grass\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    // no hit case
+    
+    @Test
+    public void test_phraseFunction_eventQuery_include_noHit() throws ParseException {
+        String query = "content:phrase(TEXT, termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    // special cases
+    
+    @Test
+    public void testSpecialCase_tldQuery_includeExclude_includeFirst() throws ParseException {
+        String query = "(content:within(TEXT, 3, termOffsetMap, 'red', 'car') && TEXT == 'red' && TEXT == 'car') && "
+                        + "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'green', 'grass') && TEXT == 'green' && TEXT == 'grass'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.1\0red\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0car\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0green\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0grass\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void testSpecialCase_tldQuery_includeExclude_includeSecond() throws ParseException {
+        String query = "(content:within(TEXT, 3, termOffsetMap, 'yellow', 'bus') && TEXT == 'yellow' && TEXT == 'bus') && "
+                        + "((_Delayed_ = true) && (content:within(TEXT, 3, termOffsetMap, 'orange', 'oatmeal') && TEXT == 'orange' && TEXT == 'oatmeal'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.1\0orange\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.1\0oatmeal\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0yellow\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0.2\0bus\0TEXT"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true);
+    }
+    
+    @Test
+    public void testSpecialCase_eventQuery_include_repeatedTerm() throws ParseException {
+        // when expanding functions, the values are treated as a set
+        String query = "content:phrase(TEXT, termOffsetMap, 'red', 'red', 'car') && TEXT == 'red' && TEXT == 'car'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0red\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0car\0TEXT"));
+        
+        test(script, buildDocument(), expectedHits, buildSource());
+    }
+    
+    // some tests where the field does not appear in the content function itself
+    
+    @Test
+    public void test_phraseFunction_eventQuery_noFieldsInFunction_include() throws ParseException {
+        String query = "content:phrase(termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT", Arrays.asList("blue", "house"));
+        
+        test(script, buildDocument(), expectedHits, buildSource(), tfFVs);
+    }
+    
+    @Test
+    public void test_phraseFunction_tldQuery_noFieldsInFunction_include() throws ParseException {
+        String query = "content:phrase(termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house'";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT", Arrays.asList("blue", "house"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true, tfFVs);
+    }
+    
+    @Test
+    public void test_phraseFunction_eventQuery_noFieldsInFunction_includeExclude() throws ParseException {
+        String query = "(content:phrase(termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house') && "
+                        + "((_Delayed_ = true) && (content:phrase(termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT", Arrays.asList("blue", "house", "purple", "pumpkin"));
+        
+        test(script, buildDocument(), expectedHits, buildSource(), tfFVs);
+    }
+    
+    @Test
+    public void test_phraseFunction_tldQuery_noFieldsInFunction_includeExclude() throws ParseException {
+        String query = "(content:phrase(termOffsetMap, 'blue', 'house') && TEXT == 'blue' && TEXT == 'house') && "
+                        + "((_Delayed_ = true) && (content:phrase(termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blue\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0house\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT", Arrays.asList("blue", "house", "purple", "pumpkin"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true, tfFVs);
+    }
+    
+    @Test
+    public void test_phraseFunction_eventQuery_noFieldsInFunction_exclude() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:phrase(termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT", Arrays.asList("purple", "pumpkin"));
+        
+        test(script, buildDocument(), expectedHits, buildSource(), tfFVs);
+    }
+    
+    @Test
+    public void test_phraseFunction_tldQuery_noFieldsInFunction_exclude() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:phrase(termOffsetMap, 'purple', 'pumpkin') && TEXT == 'purple' && TEXT == 'pumpkin'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0purple\0TEXT"));
+        expectedHits.add(new Text("datatype\0uid0\0pumpkin\0TEXT"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT", Arrays.asList("purple", "pumpkin"));
+        
+        test(script, buildTldDocument(), expectedHits, buildTldSource(), true, tfFVs);
+    }
+    
+    // multi-fielded queries with no fields in function
+    
+    @Test
+    public void test_phraseFunction_eventQuery_noFieldsInFunction_multiFielded_include() throws ParseException {
+        String query = "content:phrase(termOffsetMap, 'brown', 'fox') && ((TEXT_A == 'brown' && TEXT_A == 'fox') || (TEXT_B == 'brown' && TEXT_B == 'fox'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT_B"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT_A", Arrays.asList("brown", "fox"));
+        tfFVs.putAll("TEXT_B", Arrays.asList("brown", "fox"));
+        
+        test(script, buildMultiFieldedDocument(), expectedHits, buildMultiFieldedSource(), tfFVs);
+    }
+    
+    @Test
+    public void test_phraseFunction_tldQuery_noFieldsInFunction_multiFielded_include() throws ParseException {
+        String query = "content:phrase(termOffsetMap, 'brown', 'fox') && ((TEXT_A == 'brown' && TEXT_A == 'fox') || (TEXT_B == 'brown' && TEXT_B == 'fox'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.2\0brown\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0.2\0fox\0TEXT_B"));
+        
+        Multimap<String,String> tfFVs = HashMultimap.create();
+        tfFVs.putAll("TEXT_A", Arrays.asList("brown", "fox"));
+        tfFVs.putAll("TEXT_B", Arrays.asList("brown", "fox"));
+        
+        test(script, buildMultiFieldedTldDocument(), expectedHits, buildMultiFieldedTldSource(), true, tfFVs);
+    }
+    
+    // multi fielded function, only one field hits
+    @Test
+    public void test_phraseFunction_eventQuery_multiFielded_include() throws ParseException {
+        String query = "content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'brown', 'fox') && "
+                        + "((TEXT_A == 'brown' && TEXT_A == 'fox') || (TEXT_B == 'brown' && TEXT_B == 'fox'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT_B"));
+        
+        test(script, buildMultiFieldedDocument(), expectedHits, buildMultiFieldedSource());
+    }
+    
+    // multi fielded function, every field hits
+    @Test
+    public void test_phraseFunction_eventQuery_multiFielded_include_twoFunctions() throws ParseException {
+        String query = "content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'the', 'quick') && "
+                        + "((TEXT_A == 'the' && TEXT_A == 'quick') || (TEXT_B == 'the' && TEXT_B == 'quick')) || "
+                        + "content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'brown', 'fox') && "
+                        + "((TEXT_A == 'brown' && TEXT_A == 'fox') || (TEXT_B == 'brown' && TEXT_B == 'fox'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0the\0TEXT_A"));
+        expectedHits.add(new Text("datatype\0uid0\0quick\0TEXT_A"));
+        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT_B"));
+        
+        test(script, buildMultiFieldedDocument(), expectedHits, buildMultiFieldedSource());
+    }
+    
+    // multi fielded function, one phrase is a partial hit -- should be fully excluded from search space.
+    @Test
+    public void test_phraseFunction_eventQuery_multiFielded_includes_halfHit() throws ParseException {
+        String query = "content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'red', 'fox') && "
+                        + "((TEXT_A == 'red' && TEXT_A == 'fox') || (TEXT_B == 'red' && TEXT_B == 'fox')) || "
+                        + "content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'brown', 'fox') && "
+                        + "((TEXT_A == 'brown' && TEXT_A == 'fox') || (TEXT_B == 'brown' && TEXT_B == 'fox'))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0brown\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0\0fox\0TEXT_B"));
+        
+        test(script, buildMultiFieldedDocument(), expectedHits, buildMultiFieldedSource());
     }
     
     private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected, SortedKeyValueIterator<Key,Value> source) {
         test(script, doc, expected, source, false);
     }
     
+    private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected, SortedKeyValueIterator<Key,Value> source,
+                    Multimap<String,String> tfFieldValues) {
+        test(script, doc, expected, source, false, tfFieldValues);
+    }
+    
     private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected, SortedKeyValueIterator<Key,Value> source, boolean isTld) {
-        TermFrequencyHitFunction hitFunction = new TermFrequencyHitFunction(script, null);
+        test(script, doc, expected, source, isTld, HashMultimap.create());
+    }
+    
+    private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected, SortedKeyValueIterator<Key,Value> source, boolean isTld,
+                    Multimap<String,String> tfFieldValues) {
+        TermFrequencyHitFunction hitFunction = new TermFrequencyHitFunction(script, tfFieldValues);
         hitFunction.setSource(source);
         hitFunction.setIsTld(isTld);
         
@@ -479,39 +575,126 @@ public class TermFrequencyHitFunctionTest {
         assertEquals(expected, hits);
     }
     
-    private Document buildDocument(Multimap<String,String> fieldValues) {
-        Key docKey = new Key("shard", "datatype\0uid0");
-        Document d = new Document();
-        for (String field : fieldValues.keySet()) {
-            Collection<String> values = fieldValues.get(field);
-            for (String value : values) {
-                // The docKey is actually the raw key, post aggregation. Includes the child id.
-                PreNormalizedAttribute attr = new PreNormalizedAttribute(value, docKey, true);
-                d.put(field, attr);
-            }
-        }
-        return d;
+    // blue, red, yellow are positive terms
+    // purple, orange, green are negative terms (i.e., will only appear in the FI source).
+    private Document buildDocument() {
+        Document doc = new Document();
+        doc.put("TEXT", new PreNormalizedAttribute("blue", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("house", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("red", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("car", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("yellow", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("bus", new Key("shard", "datatype\0uid0"), true));
+        // additional values that should not show up in the search space
+        doc.put("TEXT", new PreNormalizedAttribute("see", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("spot", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("run", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("look", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("jane", new Key("shard", "datatype\0uid0"), true));
+        return doc;
     }
     
-    // Hand craft event with intersecting children
-    private Document buildDocumentWithIntersectingChildren() {
-        Document d = new Document();
-        d.put("TEXT", new PreNormalizedAttribute("brown", new Key("shard", "datatype\0uid0"), true));
-        d.put("TEXT", new PreNormalizedAttribute("brown", new Key("shard", "datatype\0uid1"), true));
-        d.put("TEXT", new PreNormalizedAttribute("fox", new Key("shard", "datatype\0uid1"), true));
-        d.put("TEXT", new PreNormalizedAttribute("fox", new Key("shard", "datatype\0uid2"), true));
-        return d;
+    private Document buildTldDocument() {
+        Document doc = new Document();
+        doc.put("TEXT", new PreNormalizedAttribute("blue", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("house", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("red", new Key("shard", "datatype\0uid0.1"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("car", new Key("shard", "datatype\0uid0.1"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("yellow", new Key("shard", "datatype\0uid0.2"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("bus", new Key("shard", "datatype\0uid0.2"), true));
+        // additional values that should not show up in the search space
+        doc.put("TEXT", new PreNormalizedAttribute("see", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("spot", new Key("shard", "datatype\0uid0.1"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("run", new Key("shard", "datatype\0uid0.2"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("look", new Key("shard", "datatype\0uid0.1"), true));
+        doc.put("TEXT", new PreNormalizedAttribute("jane", new Key("shard", "datatype\0uid0"), true));
+        return doc;
     }
     
-    private SortedKeyValueIterator<Key,Value> createSource() {
-        // Field Index source
+    // 'the quick brown fox'
+    private Document buildMultiFieldedDocument() {
+        Document doc = new Document();
+        doc.put("TEXT_A", new PreNormalizedAttribute("the", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT_A", new PreNormalizedAttribute("quick", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT_B", new PreNormalizedAttribute("brown", new Key("shard", "datatype\0uid0"), true));
+        doc.put("TEXT_B", new PreNormalizedAttribute("fox", new Key("shard", "datatype\0uid0"), true));
+        return doc;
+    }
+    
+    // 'the quick brown fox'
+    private Document buildMultiFieldedTldDocument() {
+        Document doc = new Document();
+        doc.put("TEXT_A", new PreNormalizedAttribute("the", new Key("shard", "datatype\0uid0.1"), true));
+        doc.put("TEXT_A", new PreNormalizedAttribute("quick", new Key("shard", "datatype\0uid0.1"), true));
+        doc.put("TEXT_B", new PreNormalizedAttribute("brown", new Key("shard", "datatype\0uid0.2"), true));
+        doc.put("TEXT_B", new PreNormalizedAttribute("fox", new Key("shard", "datatype\0uid0.2"), true));
+        return doc;
+    }
+    
+    private SortedKeyValueIterator<Key,Value> buildSource() {
+        // List is unsorted, SortedListKeyValueIterator will sort entries by key during init
         List<Map.Entry<Key,Value>> data = new ArrayList<>();
-        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "fox\0datatype\0uid0"), new Value()));
-        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "quick\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "blue\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "house\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "red\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "car\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "yellow\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "bus\0datatype\0uid0"), new Value()));
+        // terms from negated phrases are not built into the document.
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "purple\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "pumpkin\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "orange\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "oatmeal\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "green\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "grass\0datatype\0uid0"), new Value()));
+        // additional values that should not show up in the search space
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "see\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "spot\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "run\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "look\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "jane\0datatype\0uid0"), new Value()));
         return new SortedListKeyValueIterator(data);
     }
     
-    private SortedKeyValueIterator<Key,Value> createSource(List<Map.Entry<Key,Value>> data) {
+    private SortedKeyValueIterator<Key,Value> buildTldSource() {
+        List<Map.Entry<Key,Value>> data = new ArrayList<>();
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "blue\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "house\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "red\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "car\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "yellow\0datatype\0uid0.2"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "bus\0datatype\0uid0.2"), new Value()));
+        // And negated terms
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "purple\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "pumpkin\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "orange\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "oatmeal\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "green\0datatype\0uid0.2"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "grass\0datatype\0uid0.2"), new Value()));
+        // additional values that should not show up in the search space
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "see\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "spot\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "run\0datatype\0uid0.2"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "look\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT", "jane\0datatype\0uid0"), new Value()));
+        return new SortedListKeyValueIterator(data);
+    }
+    
+    private SortedKeyValueIterator<Key,Value> buildMultiFieldedSource() {
+        List<Map.Entry<Key,Value>> data = new ArrayList<>();
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "the\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "quick\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "brown\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "fox\0datatype\0uid0"), new Value()));
+        return new SortedListKeyValueIterator(data);
+    }
+    
+    private SortedKeyValueIterator<Key,Value> buildMultiFieldedTldSource() {
+        List<Map.Entry<Key,Value>> data = new ArrayList<>();
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "the\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "quick\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "brown\0datatype\0uid0.2"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "fox\0datatype\0uid0.2"), new Value()));
         return new SortedListKeyValueIterator(data);
     }
 }
