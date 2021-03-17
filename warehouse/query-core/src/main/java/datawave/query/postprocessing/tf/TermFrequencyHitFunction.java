@@ -28,6 +28,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -223,11 +224,6 @@ public class TermFrequencyHitFunction {
             Set<Attribute<?>> attrSet = attrs.getAttributes();
             for (Attribute<?> element : attrSet) {
                 
-                // shard:datatype\0uid
-                Key metadata = element.getMetadata();
-                
-                String uid = parseUidFromCF(metadata);
-                
                 String value;
                 Object data = element.getData();
                 if (data instanceof String) {
@@ -244,7 +240,9 @@ public class TermFrequencyHitFunction {
                 if (functionSearchSpace.containsValue(valueField)) {
                     documentHits.put(field, valueField);
                     
-                    // populate uid cache.
+                    // populate uid cache from key like 'shard:datatype\0uid'
+                    Key metadata = element.getMetadata();
+                    String uid = parseUidFromCF(metadata);
                     vfUidCache.put(valueField, uid);
                 }
             }
@@ -300,6 +298,9 @@ public class TermFrequencyHitFunction {
                     }
                 }
                 
+                // Only add fetched attributes to the document if every value exists for this field
+                boolean allFetched = true;
+                List<Attribute<?>> fetched = new ArrayList<>();
                 for (String value : args.values) {
                     
                     // Do not lookup the same field-value pair more than once
@@ -308,13 +309,20 @@ public class TermFrequencyHitFunction {
                     }
                     
                     // Fetch keys for this node
-                    boolean fetchedValues = fetchKeysForFieldValue(doc, limitRange, field, value);
+                    boolean fetchedValues = fetchKeysForFieldValue(fetched, limitRange, field, value);
                     if (!fetchedValues) {
                         // if this field-value had nothing in the field index, we're done with this sub query.
                         missedCache.put(field, value);
+                        allFetched = false;
                         break;
                     } else {
                         fetchedCache.put(field, value);
+                    }
+                }
+                
+                if (allFetched) {
+                    for (Attribute<?> attr : fetched) {
+                        doc.put(field, attr);
                     }
                 }
             }
@@ -331,8 +339,8 @@ public class TermFrequencyHitFunction {
     /**
      * Fetch field value pairs from the field index using a delayed iterator
      *
-     * @param doc
-     *            fetched keys added to this document
+     * @param fetched
+     *            add fetched attributes to this list
      * @param limitRange
      *            used to build the seek range
      * @param field
@@ -342,7 +350,7 @@ public class TermFrequencyHitFunction {
      * @return true if this field value pair contained entries in the field index
      * @throws IOException
      */
-    private boolean fetchKeysForFieldValue(Document doc, Range limitRange, String field, String value) throws IOException {
+    private boolean fetchKeysForFieldValue(List<Attribute<?>> fetched, Range limitRange, String field, String value) throws IOException {
         
         if (iter == null) {
             // lazy init
@@ -358,7 +366,7 @@ public class TermFrequencyHitFunction {
             keysFetched++;
             Key next = transformKey(iter.getTopKey(), field, value);
             Attribute<?> attr = new PreNormalizedAttribute(value, next, true);
-            doc.put(field, attr);
+            fetched.add(attr);
             iter.next();
         }
         
