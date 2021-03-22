@@ -17,7 +17,6 @@ import org.junit.Test;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -550,6 +549,48 @@ public class TermFrequencyHitFunctionTest {
         test(script, buildMultiFieldedDocument(), expectedHits, buildMultiFieldedSource());
     }
     
+    // multi fielded negated function, one phrase is a partial hit -- should be fully excluded from search space.
+    @Test
+    public void test_phraseFunction_eventQuery_multiFielded_excludes_halfHit() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'blip', 'blap') && "
+                        + "((TEXT_A == 'blip' && TEXT_A == 'blap') || (TEXT_B == 'blip' && TEXT_B == 'blap')))) || "
+                        + "((_Delayed_ = true) && (content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'bleep', 'blarp') && "
+                        + "((TEXT_A == 'bleep' && TEXT_A == 'blarp') || (TEXT_B == 'bleep' && TEXT_B == 'blarp'))))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        // For the negated event query case, we bypass the FI lookup an simply populate a TF search space from all content function field value pairs. The cost
+        // to scan the TF range is *probably* offset by not reaching back to the FI.
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0\0blip\0TEXT_A"));
+        expectedHits.add(new Text("datatype\0uid0\0blip\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0\0blap\0TEXT_A"));
+        expectedHits.add(new Text("datatype\0uid0\0blap\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0\0bleep\0TEXT_A"));
+        expectedHits.add(new Text("datatype\0uid0\0bleep\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0\0blarp\0TEXT_A"));
+        expectedHits.add(new Text("datatype\0uid0\0blarp\0TEXT_B"));
+        
+        test(script, buildMultiFieldedDocument(), expectedHits, buildMultiFieldedSource());
+    }
+    
+    // multi fielded negated function, one phrase is a partial hit -- should be fully excluded from search space.
+    @Test
+    public void test_phraseFunction_tldQuery_multiFielded_excludes_halfHit() throws ParseException {
+        String query = "((_Delayed_ = true) && (content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'blip', 'blap') && "
+                        + "((TEXT_A == 'blip' && TEXT_A == 'blap') || (TEXT_B == 'blip' && TEXT_B == 'blap')))) || "
+                        + "((_Delayed_ = true) && (content:phrase((TEXT_A | TEXT_B), termOffsetMap, 'bleep', 'blarp') && "
+                        + "((TEXT_A == 'bleep' && TEXT_A == 'blarp') || (TEXT_B == 'bleep' && TEXT_B == 'blarp'))))";
+        ASTJexlScript script = JexlASTHelper.parseJexlQuery(query);
+        
+        // first phrase, term 'blap' does not appear thus first phrase is excluded.
+        // second phrase has hits on both 'bleep' and 'blarp', thus hits are built from the phrase.
+        TreeSet<Text> expectedHits = new TreeSet<>();
+        expectedHits.add(new Text("datatype\0uid0.2\0bleep\0TEXT_B"));
+        expectedHits.add(new Text("datatype\0uid0.2\0blarp\0TEXT_B"));
+        
+        test(script, buildMultiFieldedTldDocument(), expectedHits, buildMultiFieldedTldSource(), true);
+    }
+    
     private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected, SortedKeyValueIterator<Key,Value> source) {
         test(script, doc, expected, source, false);
     }
@@ -686,6 +727,11 @@ public class TermFrequencyHitFunctionTest {
         data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "quick\0datatype\0uid0"), new Value()));
         data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "brown\0datatype\0uid0"), new Value()));
         data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "fox\0datatype\0uid0"), new Value()));
+        // add some values for negated functions, i.e., values that do not appear in the document via positive fi iterators.
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "blip\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "bloop\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "bleep\0datatype\0uid0"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "blarp\0datatype\0uid0"), new Value()));
         return new SortedListKeyValueIterator(data);
     }
     
@@ -695,6 +741,11 @@ public class TermFrequencyHitFunctionTest {
         data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "quick\0datatype\0uid0.1"), new Value()));
         data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "brown\0datatype\0uid0.2"), new Value()));
         data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "fox\0datatype\0uid0.2"), new Value()));
+        // add some values for negated functions, i.e., values that do not appear in the document via positive fi iterators.
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "blip\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_A", "bloop\0datatype\0uid0.1"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "bleep\0datatype\0uid0.2"), new Value()));
+        data.add(new SimpleEntry<>(new Key("shard", "fi\0TEXT_B", "blarp\0datatype\0uid0.2"), new Value()));
         return new SortedListKeyValueIterator(data);
     }
 }

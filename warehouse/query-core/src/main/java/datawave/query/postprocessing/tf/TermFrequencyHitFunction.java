@@ -9,6 +9,7 @@ import datawave.query.attributes.Attribute;
 import datawave.query.attributes.Attributes;
 import datawave.query.attributes.Document;
 import datawave.query.attributes.PreNormalizedAttribute;
+import datawave.query.exceptions.DatawaveFatalQueryException;
 import datawave.query.jexl.JexlASTHelper;
 import org.apache.accumulo.core.data.ArrayByteSequence;
 import org.apache.accumulo.core.data.ByteSequence;
@@ -31,12 +32,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -52,11 +51,13 @@ public class TermFrequencyHitFunction {
     // The fields to get from the document
     private final Set<String> functionFields = new HashSet<>();
     
-    // The field\0value pairs that define a functions search space. Used to filter the document.
-    private final Multimap<Function,String> functionSearchSpace = HashMultimap.create();
+    // Track positive/negative field value pairs
+    private final TreeSet<String> positiveSearchSpace = new TreeSet<>();
+    private final TreeSet<String> negativeSearchSpace = new TreeSet<>();
     
-    // Parse functions once
-    private final Map<Function,FunctionArgs> functionArgsCache = new HashMap<>();
+    // Track individual sub queries defined by field-values
+    private final Set<SubQuery> positiveSubQueries = new HashSet<>();
+    private final Set<SubQuery> negativeSubQueries = new HashSet<>();
     
     // If a content function does not have a field in it's argument list, fall back to this map.
     private final Multimap<String,String> tfFVs;
@@ -73,6 +74,11 @@ public class TermFrequencyHitFunction {
     
     // Determines how the seek range for the field index is built, i.e., should it consider child documents
     private boolean isTld = false;
+    
+    // support for fetching all negated function fields and values in sorted order, reducing number
+    // of seeks across index block boundaries.
+    private int subQueryId = 0;
+    private final Multimap<String,Integer> fvToFunctionIds = HashMultimap.create();
     
     /**
      *
@@ -114,83 +120,87 @@ public class TermFrequencyHitFunction {
         // Track the document hits as FIELD -> field\0value
         Multimap<String,String> documentHits = HashMultimap.create();
         // Track the mapping of field/value to uids, specifically for the TLD case
-        Multimap<String,String> vfUidCache = HashMultimap.create();
+        Multimap<String,String> fvUidCache = HashMultimap.create();
         
         // 0. Handle negated content functions first.
         if (hasNegatedFunctions) {
             if (isTld) {
                 // A negated field value could be in any child document. Must scan the fi and build a document of those hits.
                 try {
-                    negatedDocument = buildNegatedDocument(docKey);
+                    negatedDocument = buildNegatedDocumentV2(docKey);
                 } catch (IOException e) {
                     log.error("Problem building negated document: ", e);
+                    throw new DatawaveFatalQueryException("Could not build negated document for term frequencies", e);
                 }
             } else {
                 // In the event query case we only have one uid, thus we know where to find the negated terms -- if they exist.
-                buildSearchSpaceFromNegatedFunctions(docKey, documentHits, vfUidCache);
+                buildSearchSpaceFromNegatedFunctions(docKey, documentHits, fvUidCache);
             }
         }
         
         // 1. Filter the document by the content function search space
         for (String field : functionFields) {
             Attribute<?> attribute = doc.get(field);
-            buildSearchSpaceFromDocument(field, attribute, documentHits, vfUidCache);
+            buildSearchSpaceFromDocument(field, attribute, documentHits, fvUidCache);
             
             if (negatedDocument != null) {
                 attribute = negatedDocument.get(field);
-                buildSearchSpaceFromDocument(field, attribute, documentHits, vfUidCache);
+                buildSearchSpaceFromDocument(field, attribute, documentHits, fvUidCache);
             }
         }
         
         // 2. Now filter the function search space via the document hits
-        // At this point terms have been fetched for both inclusive and exclusive content function terms.
-        for (Function function : functionSearchSpace.keySet()) {
-            FunctionArgs args = functionArgsCache.get(function);
+        // At this point terms positive terms exist in the document and any negated terms are fetched.
+        Collection<SubQuery> subQueries = new HashSet<>();
+        subQueries.addAll(positiveSubQueries);
+        subQueries.addAll(negativeSubQueries);
+        for (SubQuery subQuery : subQueries) {
             
             // Compute the function field-value pairs on the fly...
-            for (String field : args.fields) {
-                Set<String> functionHitsForField = new HashSet<>();
-                for (String value : args.values) {
-                    String vf = value + '\u0000' + field;
-                    if (documentHits.containsEntry(field, vf)) {
-                        functionHitsForField.add(vf);
+            Set<String> functionHitsForField = new HashSet<>();
+            for (String fieldValue : subQuery.fieldValues) {
+                if (documentHits.containsEntry(subQuery.field, fieldValue)) {
+                    functionHitsForField.add(fieldValue);
+                }
+            }
+            
+            // If any pair was filtered out continue to the next function
+            if (functionHitsForField.size() != subQuery.fieldValues.size()) {
+                continue;
+            }
+            
+            // Perform iterative intersection
+            Set<String> intersectedUids = new HashSet<>();
+            if (!functionHitsForField.isEmpty()) {
+                
+                Iterator<String> vfIter = functionHitsForField.iterator();
+                intersectedUids.addAll(fvUidCache.get(vfIter.next()));
+                
+                while (vfIter.hasNext()) {
+                    
+                    Set<String> nextUids = (Set<String>) fvUidCache.get(vfIter.next());
+                    intersectedUids = Sets.intersection(intersectedUids, nextUids);
+                    
+                    if (intersectedUids.isEmpty()) {
+                        // If we prune to zero at any point, stop for this field.
+                        functionHitsForField.clear();
+                        break;
                     }
                 }
+            }
+            
+            // Build TF CQ like 'datatype\0uid\0value\0field'
+            if (!functionHitsForField.isEmpty()) {
                 
-                // If any pair was filtered out continue to the next function
-                if (functionHitsForField.size() != args.values.size()) {
-                    continue;
-                }
+                String datatype = parseDatatypeFromCF(docKey);
                 
-                // Perform iterative intersection
-                Set<String> intersectedUids = new HashSet<>();
-                if (!functionHitsForField.isEmpty()) {
-                    
-                    Iterator<String> vfIter = functionHitsForField.iterator();
-                    intersectedUids.addAll(vfUidCache.get(vfIter.next()));
-                    
-                    while (vfIter.hasNext()) {
-                        
-                        Set<String> nextUids = (Set<String>) vfUidCache.get(vfIter.next());
-                        intersectedUids = Sets.intersection(intersectedUids, nextUids);
-                        
-                        if (intersectedUids.isEmpty()) {
-                            // If we prune to zero at any point, stop for this field.
-                            functionHitsForField.clear();
-                            break;
-                        }
-                    }
-                }
-                
-                // Build TF CQ like 'datatype\0uid\0value\0field'
-                if (!functionHitsForField.isEmpty()) {
-                    
-                    String datatype = parseDatatypeFromCF(docKey);
-                    
-                    for (String uid : intersectedUids) {
-                        for (String valueField : functionHitsForField) {
-                            hits.add(new Text(datatype + '\u0000' + uid + '\u0000' + valueField));
-                        }
+                String field, value;
+                for (String uid : intersectedUids) {
+                    for (String fieldValue : functionHitsForField) {
+                        int index = fieldValue.indexOf('\u0000');
+                        field = fieldValue.substring(0, index);
+                        value = fieldValue.substring(index + 1);
+                        hits.add(new Text(datatype + '\u0000' + uid + '\u0000' + value + '\u0000' + field));
                     }
                 }
             }
@@ -206,22 +216,17 @@ public class TermFrequencyHitFunction {
      *            a key like shard:datatype\0uid
      * @param documentHits
      *            tracks the value hits for a field
-     * @param vfUidCache
-     *            tracks the uids that map to a specific value\0field pair
+     * @param fvUidCache
+     *            tracks the uids that map to a specific field\0value pair
      */
-    private void buildSearchSpaceFromNegatedFunctions(Key docKey, Multimap<String,String> documentHits, Multimap<String,String> vfUidCache) {
+    private void buildSearchSpaceFromNegatedFunctions(Key docKey, Multimap<String,String> documentHits, Multimap<String,String> fvUidCache) {
         String uid = parseUidFromCF(docKey);
-        for (FunctionArgs args : functionArgsCache.values()) {
-            if (args.isNegated) {
-                for (String field : args.fields) {
-                    for (String value : args.values) {
-                        String valueField = value + '\u0000' + field;
-                        if (functionSearchSpace.containsValue(valueField)) {
-                            documentHits.put(field, valueField);
-                            // populate uid cache.
-                            vfUidCache.put(valueField, uid);
-                        }
-                    }
+        for (SubQuery subQuery : negativeSubQueries) {
+            for (String fieldValue : subQuery.fieldValues) {
+                if (positiveSearchSpace.contains(fieldValue) || negativeSearchSpace.contains(fieldValue)) {
+                    documentHits.put(subQuery.field, fieldValue);
+                    // populate uid cache.
+                    fvUidCache.put(fieldValue, uid);
                 }
             }
         }
@@ -235,11 +240,11 @@ public class TermFrequencyHitFunction {
      * @param attribute
      *            an attribute from a document
      * @param documentHits
-     *            tracks the value-field hits for a given field
-     * @param vfUidCache
-     *            tracks the uid hits for a given value-field
+     *            tracks the field-value hits for a given field
+     * @param fvUidCache
+     *            tracks the uid hits for a given field-value pair
      */
-    private void buildSearchSpaceFromDocument(String field, Attribute<?> attribute, Multimap<String,String> documentHits, Multimap<String,String> vfUidCache) {
+    private void buildSearchSpaceFromDocument(String field, Attribute<?> attribute, Multimap<String,String> documentHits, Multimap<String,String> fvUidCache) {
         if (attribute instanceof Attributes) {
             Attributes attrs = (Attributes) attribute;
             Set<Attribute<?>> attrSet = attrs.getAttributes();
@@ -256,15 +261,14 @@ public class TermFrequencyHitFunction {
                     throw new IllegalStateException("Expected attribute to be either a String or a Type<?> but was " + data.getClass());
                 }
                 
-                // Note: using value\0field is easier when building the TermFrequency column qualifier at the end
-                String valueField = value + '\u0000' + field;
-                if (functionSearchSpace.containsValue(valueField)) {
-                    documentHits.put(field, valueField);
+                String fieldValue = field + '\u0000' + value;
+                if (positiveSearchSpace.contains(fieldValue) || negativeSearchSpace.contains(fieldValue)) {
+                    documentHits.put(field, fieldValue);
                     
                     // populate uid cache from key like 'shard:datatype\0uid'
                     Key metadata = element.getMetadata();
                     String uid = parseUidFromCF(metadata);
-                    vfUidCache.put(valueField, uid);
+                    fvUidCache.put(fieldValue, uid);
                 }
             }
         }
@@ -273,77 +277,68 @@ public class TermFrequencyHitFunction {
     }
     
     /**
-     * Build up a document of negated content function terms. Uses the {@link DelayedFieldIndexIterator} to fetch the uids for a field value pair off of the
-     * field index.
+     * Build a document from negated content function terms. The {@link DelayedFieldIndexIterator} fetches uids for a field value pair from the field index.
      *
      * Tracks which field value pairs have already been run, that is which returned results or returned zero results. This information avoids duplicate work and
      * can exclude entire content functions that share a field value that has no entries in the field index.
+     *
+     * Note on implementation: seeking to a new index block is expensive. Therefore we roll through the fields and values in sorted order.
      *
      * @param docKey
      *            the document key
      * @return a document of negated field value pairs
      * @throws IOException
+     *             if the underlying iterator encounters a problem
      */
-    private Document buildNegatedDocument(Key docKey) throws IOException {
+    private Document buildNegatedDocumentV2(Key docKey) throws IOException {
         
         long start = System.nanoTime();
         
         Document doc = new Document();
         Range limitRange = buildLimitRange(docKey);
         
-        // Track field value pairs that returned hits, or returned nothing.
-        Multimap<String,String> fetchedCache = HashMultimap.create();
-        Multimap<String,String> missedCache = HashMultimap.create();
+        // Track function ids that will never hit, therefore do not continue
+        // looking up additional field value pairs from that function
+        Set<Integer> missed = new HashSet<>();
+        Multimap<String,Attribute<?>> fetchedAttrs = HashMultimap.create();
         
-        for (FunctionArgs args : functionArgsCache.values()) {
-            // Only lookup field values if the content function is under a negation
-            if (!args.isNegated) {
+        for (String fieldValue : negativeSearchSpace) {
+            Collection<Integer> ids = fvToFunctionIds.get(fieldValue);
+            
+            boolean allMissed = true;
+            for (int id : ids) {
+                if (!missed.contains(id)) {
+                    allMissed = false;
+                    break;
+                }
+            }
+            
+            if (allMissed) {
+                // If every function mapped to this field value pair is part of the missed cache, don't bother looking up this field value.
                 continue;
             }
             
-            for (String field : args.fields) {
-                // Check to see if this sub query contains a term that missed during a previous lookup
-                if (missedCache.containsKey(field)) {
-                    boolean found = false;
-                    for (String value : args.values) {
-                        if (missedCache.containsEntry(field, value)) {
-                            // One of the terms in this function previously missed, returning zero results.
-                            // Do not bother looking up any field-values for this functions
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (found) {
-                        // Skip this sub query
-                        continue;
-                    }
-                }
-                
-                // Only add fetched attributes to the document if every value exists for this field
-                boolean allFetched = true;
-                List<Attribute<?>> fetched = new ArrayList<>();
-                for (String value : args.values) {
-                    
-                    // Do not lookup the same field-value pair more than once
-                    if (fetchedCache.containsEntry(field, value)) {
-                        continue;
-                    }
-                    
-                    // Fetch keys for this node
-                    boolean fetchedValues = fetchKeysForFieldValue(fetched, limitRange, field, value);
-                    if (!fetchedValues) {
-                        // if this field-value had nothing in the field index, we're done with this sub query.
-                        missedCache.put(field, value);
-                        allFetched = false;
-                        break;
-                    } else {
-                        fetchedCache.put(field, value);
-                    }
-                }
-                
-                if (allFetched) {
-                    for (Attribute<?> attr : fetched) {
-                        doc.put(field, attr);
+            int index = fieldValue.indexOf('\u0000');
+            String field = fieldValue.substring(0, index);
+            String value = fieldValue.substring(index + 1);
+            List<Attribute<?>> fetched = new ArrayList<>();
+            boolean fetchedValues = fetchKeysForFieldValue(fetched, limitRange, field, value);
+            if (fetchedValues) {
+                fetchedAttrs.putAll(fieldValue, fetched);
+            } else {
+                missed.addAll(fvToFunctionIds.get(fieldValue));
+            }
+        }
+        
+        Set<Integer> functionsWithHits = new HashSet<>(fvToFunctionIds.values());
+        functionsWithHits.removeAll(missed);
+        
+        for (SubQuery subQuery : negativeSubQueries) {
+            if (functionsWithHits.contains(subQuery.id)) {
+                for (String fieldValue : subQuery.fieldValues) {
+                    Collection<Attribute<?>> attrs = fetchedAttrs.get(fieldValue);
+                    for (Attribute<?> attr : attrs) {
+                        doc.put(subQuery.field, attr);
                     }
                 }
             }
@@ -515,7 +510,7 @@ public class TermFrequencyHitFunction {
     }
     
     /**
-     * Preprocessing step
+     * Preprocessing step, parse functions into their respective sub queries and precompute search space.
      * 
      * @param script
      *            the query tree
@@ -524,19 +519,24 @@ public class TermFrequencyHitFunction {
         Multimap<String,Function> allFunctions = TermOffsetPopulator.getContentFunctions(script);
         Set<Function> functions = new HashSet<>(allFunctions.values());
         for (Function function : functions) {
-            FunctionArgs args = parseFunction(function);
-            // update function arg cache
-            functionArgsCache.put(function, args);
-            
-            // populate field search space
-            functionFields.addAll(args.fields);
-            
-            // populate field/value search space
-            for (String field : args.fields) {
-                for (String value : args.values) {
-                    // Easier to build TF CQs if done this way up front
-                    String valueField = value + '\u0000' + field;
-                    functionSearchSpace.put(function, valueField);
+            List<SubQuery> subQueries = parseFunction(function);
+            for (SubQuery subQuery : subQueries) {
+                
+                // populate field search space
+                functionFields.add(subQuery.field);
+                
+                if (subQuery.isNegated) {
+                    negativeSubQueries.add(subQuery);
+                    for (String fieldValue : subQuery.fieldValues) {
+                        fvToFunctionIds.put(fieldValue, subQuery.id);
+                        negativeSearchSpace.add(fieldValue);
+                    }
+                } else {
+                    positiveSubQueries.add(subQuery);
+                    for (String fieldValue : subQuery.fieldValues) {
+                        fvToFunctionIds.put(fieldValue, subQuery.id);
+                        positiveSearchSpace.add(fieldValue);
+                    }
                 }
             }
         }
@@ -549,7 +549,7 @@ public class TermFrequencyHitFunction {
      *            a {@link Function} that is either adjacent, phrase, or within
      * @return a list of fields and values associated with the provided function
      */
-    private FunctionArgs parseFunction(Function function) {
+    private List<SubQuery> parseFunction(Function function) {
         // functions may take different forms..
         // within = {field, number, termOffsetMap, terms...}
         // within = {number, termOffsetMap, terms...}
@@ -587,7 +587,13 @@ public class TermFrequencyHitFunction {
             this.hasNegatedFunctions = true;
         }
         
-        return new FunctionArgs(isNegated, fields, values);
+        // Build up the list of sub queries
+        LinkedList<SubQuery> subQueries = new LinkedList<>();
+        for (String field : fields) {
+            subQueries.add(new SubQuery(subQueryId++, isNegated, field, values));
+        }
+        
+        return subQueries;
     }
     
     // If a function does not contain the fields being queried, find the fields via the term frequency field-value map
@@ -661,16 +667,23 @@ public class TermFrequencyHitFunction {
         return parsed;
     }
     
-    // utility class
-    private class FunctionArgs {
+    /**
+     * A multi-fielded function can be thought of as the conjunction of multiple sub queries.
+     */
+    private class SubQuery {
+        int id;
         boolean isNegated;
-        TreeSet<String> fields;
-        TreeSet<String> values;
+        String field;
+        TreeSet<String> fieldValues;
         
-        public FunctionArgs(boolean isNegated, TreeSet<String> fields, TreeSet<String> values) {
+        public SubQuery(int id, boolean isNegated, String field, TreeSet<String> values) {
+            this.id = id;
             this.isNegated = isNegated;
-            this.fields = fields;
-            this.values = values;
+            this.field = field;
+            this.fieldValues = new TreeSet<>();
+            for (String value : values) {
+                fieldValues.add(this.field + '\u0000' + value);
+            }
         }
     }
 }
