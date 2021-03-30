@@ -163,6 +163,11 @@ public class TermOffsetPopulator {
             // Malformed keys will fail to parse, skip them.
             if (field == null || value == null) {
                 log.error("Malformed term frequency key: " + key.toStringNoTime());
+                try {
+                    offsetIter.next();
+                } catch (IOException ioe) {
+                    log.error("Next failed: " + range, ioe);
+                }
                 continue;
             }
             

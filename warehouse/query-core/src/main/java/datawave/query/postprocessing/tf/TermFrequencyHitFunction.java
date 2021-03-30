@@ -123,7 +123,7 @@ public class TermFrequencyHitFunction {
             if (isTld) {
                 // A negated field value could be in any child document. Must scan the fi and build a document of those hits.
                 try {
-                    negatedDocument = buildNegatedDocumentV2(docKey);
+                    negatedDocument = buildNegatedDocument(docKey);
                 } catch (IOException e) {
                     log.error("Problem building negated document: ", e);
                     throw new DatawaveFatalQueryException("Could not build negated document for term frequencies", e);
@@ -286,7 +286,7 @@ public class TermFrequencyHitFunction {
      * @throws IOException
      *             if the underlying iterator encounters a problem
      */
-    private Document buildNegatedDocumentV2(Key docKey) throws IOException {
+    private Document buildNegatedDocument(Key docKey) throws IOException {
         
         long start = System.nanoTime();
         

@@ -4,7 +4,9 @@ import org.apache.accumulo.core.data.Key;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class TFKeyTest {
     
@@ -19,6 +21,7 @@ public class TFKeyTest {
         assertEquals("fieldValue", tfKey.getValue());
         assertEquals("fieldName", tfKey.getField());
         assertEquals("uid\0fieldValue", tfKey.getUidAndValue());
+        assertTrue(tfKey.isValid());
         
         // Ensure it works when multiple nulls are in the value
         k = new Key("row", "tf", "datatype\0uid\0fi\0eld\0Va\0lue\0fieldName");
@@ -28,6 +31,7 @@ public class TFKeyTest {
         assertEquals("fi\0eld\0Va\0lue", tfKey.getValue());
         assertEquals("fieldName", tfKey.getField());
         assertEquals("uid\0fi\0eld\0Va\0lue", tfKey.getUidAndValue());
+        assertTrue(tfKey.isValid());
     }
     
     @Test
@@ -41,5 +45,6 @@ public class TFKeyTest {
         assertNull(tfKey.getValue());
         assertNull(tfKey.getField());
         assertNull(tfKey.getUidAndValue());
+        assertFalse(tfKey.isValid());
     }
 }

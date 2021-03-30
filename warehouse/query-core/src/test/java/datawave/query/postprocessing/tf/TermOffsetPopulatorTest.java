@@ -27,6 +27,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -178,6 +179,32 @@ public class TermOffsetPopulatorTest {
         assertTrue(termOffsetMap.containsKey("fish"));
     }
     
+    @Test
+    public void testTraversalOfMalformedData() {
+        Multimap<String,String> tfFields = HashMultimap.create();
+        tfFields.putAll("TEXT", Arrays.asList("quick", "fox"));
+        
+        SortedMapIterator iter = new SortedMapIterator(createMalformedData());
+        
+        TermOffsetPopulator populator = new TermOffsetPopulator(tfFields, Sets.newHashSet("TEXT"), null, iter);
+        
+        Key docKey = new Key("shard", "datatype\0uid0");
+        TreeSet<Text> searchSpace = new TreeSet<>();
+        searchSpace.add(new Text("datatype\0uid0\0fox\0TEXT"));
+        searchSpace.add(new Text("datatype\0uid0\0quick\0TEXT"));
+        Map<String,Object> contextMap = populator.getContextMap(docKey, searchSpace);
+        
+        // ensure context map was populated
+        assertNotNull(contextMap);
+        assertEquals(1, contextMap.size());
+        assertTrue(contextMap.containsKey(Constants.TERM_OFFSET_MAP_JEXL_VARIABLE_NAME));
+        
+        // ensure termOffsetMap has correct values
+        HashMap<String,TermFrequencyList> termOffsetMap = (HashMap<String,TermFrequencyList>) contextMap.get(Constants.TERM_OFFSET_MAP_JEXL_VARIABLE_NAME);
+        assertFalse(termOffsetMap.containsKey("fox")); // the key for 'fox' is malformed
+        assertTrue(termOffsetMap.containsKey("quick")); // the key for 'quick' is correct
+    }
+    
     private SortedMapIterator createDataIter() {
         TreeMap<Key,Value> data = createData();
         return new SortedMapIterator(data);
@@ -221,5 +248,18 @@ public class TermOffsetPopulatorTest {
             return new Value(TermWeight.Info.newBuilder().build().toByteArray());
         }
         return new Value(TermWeight.Info.newBuilder().addAllTermOffset(offsets).build().toByteArray());
+    }
+    
+    private TreeMap<Key,Value> createMalformedData() {
+        TreeMap<Key,Value> data = new TreeMap<>();
+        data.put(new Key("shard", "tf", "datatype\0uid0\0the\0TEXT"), createTFValue(0, 6));
+        data.put(new Key("shard", "tf", "datatype\0uid0\0quick\0TEXT"), createTFValue(1));
+        data.put(new Key("shard", "tf", "datatype\0uid0\0brown"), createTFValue(2));
+        data.put(new Key("shard", "tf", "datatype\0uid0\0fox\0\0"), createTFValue(3));
+        data.put(new Key("shard", "tf", "datatype\0jumped"), createTFValue(4));
+        data.put(new Key("shard", "tf", "datatype\0uid0\0over\0TEXT"), createTFValue(5));
+        data.put(new Key("shard", "tf", "datatype\0uid0lazyTEXT"), createTFValue(7));
+        data.put(new Key("shard", "tf", "datatypeuid0\0dog\0TEXT"), createTFValue(8));
+        return data;
     }
 }
