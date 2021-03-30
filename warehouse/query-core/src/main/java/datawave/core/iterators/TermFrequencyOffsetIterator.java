@@ -1,5 +1,6 @@
 package datawave.core.iterators;
 
+import datawave.query.Constants;
 import org.apache.accumulo.core.data.ArrayByteSequence;
 import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
@@ -17,10 +18,12 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.TreeSet;
 
-import static datawave.query.Constants.TERM_FREQUENCY_COLUMN_FAMILY;
-
 /**
- * Alternate implementation of the {@link TermFrequencyIterator} that operates on precomputed fully-qualified column qualifiers
+ * Alternate implementation of the {@link TermFrequencyIterator} that operates on precomputed column qualifiers.
+ *
+ * Term Frequency keys take the form {shard:tf:datatype\0uid\0value\0field}.
+ *
+ * This iterator fetches offsets for known datatype, uid, value, and field combinations. It does not support fetching offsets for a partial column qualifier.
  */
 public class TermFrequencyOffsetIterator extends WrappingIterator {
     
@@ -33,9 +36,7 @@ public class TermFrequencyOffsetIterator extends WrappingIterator {
     private final TreeSet<Text> searchSpace;
     
     private Range initialRange;
-    
-    private final ByteSequence tfBytes = new ArrayByteSequence(TERM_FREQUENCY_COLUMN_FAMILY.getBytes(), 0, TERM_FREQUENCY_COLUMN_FAMILY.getLength());
-    protected Collection<ByteSequence> seekCFs = Collections.singleton(tfBytes);
+    private final static Collection<ByteSequence> seekCFs = Collections.singleton(new ArrayByteSequence("tf".getBytes()));
     
     private SortedKeyValueIterator<Key,Value> source;
     
