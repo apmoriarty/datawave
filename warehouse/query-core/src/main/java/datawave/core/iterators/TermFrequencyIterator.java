@@ -194,6 +194,7 @@ public class TermFrequencyIterator extends WrappingIterator {
             if (!tfKey.isValid()) {
                 log.error("Malformed term frequency key: " + k.toStringNoTime());
                 source.next();
+                continue;
             }
             
             if (fieldValueAccepted()) {
