@@ -46,7 +46,7 @@ import java.util.TreeSet;
  */
 public class TermFrequencyHitFunction {
     
-    private final Logger log = Logger.getLogger(TermFrequencyHitFunction.class);
+    private final static Logger log = Logger.getLogger(TermFrequencyHitFunction.class);
     
     // The fields to get from the document
     private final Set<String> functionFields = new HashSet<>();
@@ -273,7 +273,7 @@ public class TermFrequencyHitFunction {
     }
     
     /**
-     * Build a document from negated content function terms. The {@link DelayedFieldIndexIterator} fetches uids for a field value pair from the field index.
+     * Build a document from negated content function terms. Uids for a field value pair are fetched from the field index.
      *
      * Tracks which field value pairs have already been run, that is which returned results or returned zero results. This information avoids duplicate work and
      * can exclude entire content functions that share a field value that has no entries in the field index.
@@ -553,6 +553,12 @@ public class TermFrequencyHitFunction {
         // adjacent = {termOffsetMap, terms...}
         // phrase = {field, termOffsetMap, terms...}
         // phrase = {termOffsetMap, terms...}
+        
+        if (!TermOffsetPopulator.phraseFunctions.contains(function.name())) {
+            log.error(function.name() + " is not a supported content function.");
+            return Collections.EMPTY_LIST;
+        }
+        
         List<JexlNode> args = function.args();
         int index = function.name().equals("within") ? 3 : 2;
         
@@ -667,10 +673,10 @@ public class TermFrequencyHitFunction {
      * A multi-fielded function can be thought of as the conjunction of multiple sub queries.
      */
     private class SubQuery {
-        int id;
-        boolean isNegated;
-        String field;
-        TreeSet<String> fieldValues;
+        public final int id;
+        public final boolean isNegated;
+        public final String field;
+        public final TreeSet<String> fieldValues;
         
         public SubQuery(int id, boolean isNegated, String field, TreeSet<String> values) {
             this.id = id;

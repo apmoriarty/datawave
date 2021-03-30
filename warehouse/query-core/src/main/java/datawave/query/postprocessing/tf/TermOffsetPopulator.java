@@ -47,7 +47,7 @@ public class TermOffsetPopulator {
     
     private static final Logger log = Logger.getLogger(TermOffsetPopulator.class);
     
-    private static final Set<String> phraseFunctions;
+    public static final Set<String> phraseFunctions;
     
     static {
         Set<String> _phraseFunctions = Sets.newHashSet();

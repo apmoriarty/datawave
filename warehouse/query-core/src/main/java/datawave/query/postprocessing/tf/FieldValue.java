@@ -5,7 +5,7 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.hadoop.io.Text;
 
 /**
- * A field name and value which is sorted on {@code <value>\0<name>}
+ * A field name and value which is sorted on {@code <value>\0<field>}. Only operates on Term Frequency keys.
  */
 @Deprecated
 public class FieldValue implements Comparable<FieldValue> {
