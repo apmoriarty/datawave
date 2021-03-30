@@ -292,6 +292,5 @@ public class PushdownNegationVisitorTest {
         JexlNode pushed = PushdownNegationVisitor.pushdownNegations(script);
         String expected = "FOO == 'few' && ((!(content:phrase('TEXT', termOffsetMap, 'bar', 'baz')) || !(TEXT == 'bar') || !(TEXT == 'baz')))";
         Assert.assertEquals(expected, JexlStringBuildingVisitor.buildQuery(pushed));
-        
     }
 }

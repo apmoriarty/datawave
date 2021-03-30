@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 
 import static datawave.query.Constants.TERM_FREQUENCY_COLUMN_FAMILY;
@@ -39,10 +38,6 @@ public class TermFrequencyOffsetIterator extends WrappingIterator {
     protected Collection<ByteSequence> seekCFs = Collections.singleton(tfBytes);
     
     private SortedKeyValueIterator<Key,Value> source;
-    
-    public TermFrequencyOffsetIterator(Set<Text> searchSpace) {
-        this(new TreeSet<>(searchSpace));
-    }
     
     public TermFrequencyOffsetIterator(TreeSet<Text> searchSpace) {
         this.searchSpace = searchSpace;
