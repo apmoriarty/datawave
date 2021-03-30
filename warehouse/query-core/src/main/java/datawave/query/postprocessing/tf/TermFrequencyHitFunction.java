@@ -69,9 +69,6 @@ public class TermFrequencyHitFunction {
     
     private SortedKeyValueIterator<Key,Value> source;
     
-    // use this one weird trick to avoid an obnoxious number of source deep copies!
-    private DelayedFieldIndexIterator iter;
-    
     // Determines how the seek range for the field index is built, i.e., should it consider child documents
     private boolean isTld = false;
     
@@ -102,8 +99,7 @@ public class TermFrequencyHitFunction {
     
     // used to perform a lazy init
     private void initializeSource() throws IOException {
-        iter = new DelayedFieldIndexIterator();
-        iter.init(source, null, null);
+        // No-op, for now.
     }
     
     /**
@@ -369,22 +365,22 @@ public class TermFrequencyHitFunction {
      */
     private boolean fetchKeysForFieldValue(List<Attribute<?>> fetched, Range limitRange, String field, String value) throws IOException {
         
-        if (iter == null) {
+        if (source == null) {
             // lazy init
             initializeSource();
         }
         
         Range seekRange = buildSeekRangeForFi(limitRange.getStartKey(), field, value);
         Collection<ByteSequence> seekCFs = Collections.singleton(new ArrayByteSequence("fi\0" + field));
-        iter.seek(seekRange, seekCFs, true);
+        source.seek(seekRange, seekCFs, true);
         
         int keysFetched = 0;
-        while (iter.hasTop()) {
+        while (source.hasTop()) {
             keysFetched++;
-            Key next = transformKey(iter.getTopKey(), field, value);
+            Key next = transformKey(source.getTopKey(), field, value);
             Attribute<?> attr = new PreNormalizedAttribute(value, next, true);
             fetched.add(attr);
-            iter.next();
+            source.next();
         }
         
         return keysFetched > 0;
