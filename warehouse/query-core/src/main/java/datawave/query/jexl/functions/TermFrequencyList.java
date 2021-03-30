@@ -106,7 +106,7 @@ public class TermFrequencyList {
             }
         }
         
-        eventId.append(new String(backing.subSequence(0, index).toArray()));
+        eventId.append(new String(backing.getBackingArray(), backing.offset(), index));
         return eventId.toString();
     }
     
