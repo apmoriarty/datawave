@@ -77,29 +77,26 @@ public class TermFrequencyHitFunction {
     private int subQueryId = 0;
     private final Multimap<String,Integer> fvToFunctionIds = HashMultimap.create();
     
+    private TermFrequencyConfig tfConfig;
+    
     /**
      *
-     * @param script
-     *            the parsed query tree
+     * @param tfConfig
+     *            config object for this function
+     *
      * @param tfFVs
      *            a multimap of term frequency fields to values
      */
-    public TermFrequencyHitFunction(ASTJexlScript script, Multimap<String,String> tfFVs) {
+    public TermFrequencyHitFunction(TermFrequencyConfig tfConfig, Multimap<String,String> tfFVs) {
+        this.tfConfig = tfConfig;
         this.tfFVs = tfFVs;
-        populateFunctionSearchSpace(script);
-    }
-    
-    public void setSource(SortedKeyValueIterator<Key,Value> source) {
-        this.source = source;
-    }
-    
-    public void setIsTld(boolean isTld) {
-        this.isTld = isTld;
+        this.isTld = tfConfig.isTld();
+        populateFunctionSearchSpace(tfConfig.getScript());
     }
     
     // used to perform a lazy init
-    private void initializeSource() throws IOException {
-        // No-op, for now.
+    private void initializeSource() {
+        this.source = tfConfig.getSourceDeepCopy();
     }
     
     /**

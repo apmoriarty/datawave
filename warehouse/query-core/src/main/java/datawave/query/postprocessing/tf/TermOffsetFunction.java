@@ -8,9 +8,6 @@ import datawave.query.util.Tuple2;
 import datawave.query.util.Tuple3;
 import datawave.query.util.Tuples;
 import org.apache.accumulo.core.data.Key;
-import org.apache.accumulo.core.data.Value;
-import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
-import org.apache.commons.jexl2.parser.ASTJexlScript;
 import org.apache.hadoop.io.Text;
 
 import java.util.HashMap;
@@ -27,11 +24,12 @@ public class TermOffsetFunction implements com.google.common.base.Function<Tuple
     // Responsible for reducing the term frequency search space
     private TermFrequencyHitFunction hitFunction;
     
-    public TermOffsetFunction(TermOffsetPopulator tfPopulator, ASTJexlScript script, SortedKeyValueIterator<Key,Value> source, boolean isTld) {
+    private TermFrequencyConfig tfConfig;
+    
+    public TermOffsetFunction(TermFrequencyConfig tfConfig, TermOffsetPopulator tfPopulator) {
+        this.tfConfig = tfConfig;
         this.tfPopulator = tfPopulator;
-        this.hitFunction = new TermFrequencyHitFunction(script, tfPopulator.getTermFrequencyFieldValues());
-        this.hitFunction.setSource(source);
-        this.hitFunction.setIsTld(isTld);
+        this.hitFunction = new TermFrequencyHitFunction(tfConfig, tfPopulator.getTermFrequencyFieldValues());
     }
     
     @Override

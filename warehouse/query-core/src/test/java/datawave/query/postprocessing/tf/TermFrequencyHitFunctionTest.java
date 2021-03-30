@@ -8,6 +8,7 @@ import datawave.query.iterator.SortedListKeyValueIterator;
 import datawave.query.jexl.JexlASTHelper;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.iterators.IteratorEnvironment;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
 import org.apache.commons.jexl2.parser.ASTJexlScript;
 import org.apache.commons.jexl2.parser.ParseException;
@@ -606,15 +607,21 @@ public class TermFrequencyHitFunctionTest {
     
     private void test(ASTJexlScript script, Document doc, TreeSet<Text> expected, SortedKeyValueIterator<Key,Value> source, boolean isTld,
                     Multimap<String,String> tfFieldValues) {
-        TermFrequencyHitFunction hitFunction = new TermFrequencyHitFunction(script, tfFieldValues);
-        hitFunction.setSource(source);
-        hitFunction.setIsTld(isTld);
+        TermFrequencyConfig tfConfig = new TermFrequencyConfig();
+        tfConfig.setSource(source);
+        tfConfig.setScript(script);
+        tfConfig.setTld(isTld);
+        tfConfig.setIterEnv(new TestIteratorEnvironment());
+        
+        TermFrequencyHitFunction hitFunction = new TermFrequencyHitFunction(tfConfig, tfFieldValues);
         
         Key docKey = new Key("shard", "datatype\0uid0");
         TreeSet<Text> hits = hitFunction.apply(docKey, doc);
         
         assertEquals(expected, hits);
     }
+    
+    public static class TestIteratorEnvironment implements IteratorEnvironment {}
     
     // blue, red, yellow are positive terms
     // purple, orange, green are negative terms (i.e., will only appear in the FI source).

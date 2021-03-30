@@ -13,6 +13,7 @@ import datawave.query.iterator.logic.IndexIterator;
 import datawave.query.jexl.visitors.IteratorBuildingVisitor;
 import datawave.query.planner.SeekingQueryPlanner;
 import datawave.query.postprocessing.tf.TFFactory;
+import datawave.query.postprocessing.tf.TermFrequencyConfig;
 import datawave.query.predicate.ChainableEventDataQueryFilter;
 import datawave.query.predicate.ConfiguredPredicate;
 import datawave.query.predicate.EventDataQueryFilter;
@@ -26,7 +27,6 @@ import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.IteratorEnvironment;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
-import org.apache.commons.jexl2.parser.ASTJexlScript;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig.ConfigException;
 
@@ -274,9 +274,8 @@ public class TLDQueryIterator extends QueryIterator {
     }
     
     @Override
-    protected Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> buildTfFunction(ASTJexlScript script,
-                    SortedKeyValueIterator<Key,Value> source, SortedKeyValueIterator<Key,Value> secondSource) {
-        return TFFactory.getFunction(script, getContentExpansionFields(), getTermFrequencyFields(), this.getTypeMetadata(), super.equality,
-                        getEvaluationFilter(), source, secondSource, true);
+    protected Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> buildTfFunction(TermFrequencyConfig tfConfig) {
+        tfConfig.setTld(true);
+        return TFFactory.getFunction(tfConfig);
     }
 }

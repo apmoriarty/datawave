@@ -63,6 +63,7 @@ import datawave.query.jexl.visitors.IteratorBuildingVisitor;
 import datawave.query.jexl.visitors.SatisfactionVisitor;
 import datawave.query.jexl.visitors.VariableNameVisitor;
 import datawave.query.postprocessing.tf.TFFactory;
+import datawave.query.postprocessing.tf.TermFrequencyConfig;
 import datawave.query.predicate.EmptyDocumentFilter;
 import datawave.query.statsd.QueryStatsDClient;
 import datawave.query.tracking.ActiveQuery;
@@ -982,13 +983,17 @@ public class QueryIterator extends QueryOptions implements YieldingKeyValueItera
             final Iterator<Tuple3<Key,Document,Map<String,Object>>> itrWithContext;
             if (this.isTermFrequenciesRequired()) {
                 
-                // First source fetches term offsets
-                SortedKeyValueIterator<Key,Value> firstSource = sourceDeepCopy.deepCopy(myEnvironment);
-                // Second source fetches tf field value pairs from the field index for delayed (negated) phrases
-                SortedKeyValueIterator<Key,Value> secondSource = sourceDeepCopy.deepCopy(myEnvironment);
+                TermFrequencyConfig tfConfig = new TermFrequencyConfig();
+                tfConfig.setScript(getScript(documentSource));
+                tfConfig.setIterEnv(myEnvironment);
+                tfConfig.setSource(sourceDeepCopy.deepCopy(myEnvironment));
+                tfConfig.setContentExpansionFields(getContentExpansionFields());
+                tfConfig.setTfFields(getTermFrequencyFields());
+                tfConfig.setTypeMetadata(getTypeMetadata());
+                tfConfig.setEquality(super.equality);
+                tfConfig.setEvaluationFilter(getEvaluationFilter());
                 
-                Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> tfFunction = buildTfFunction(getScript(documentSource), firstSource,
-                                secondSource);
+                Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> tfFunction = buildTfFunction(tfConfig);
                 
                 itrWithContext = TraceIterators.transform(tupleItr, tfFunction, "Term Frequency Lookup");
             } else {
@@ -1026,10 +1031,8 @@ public class QueryIterator extends QueryOptions implements YieldingKeyValueItera
         return documents;
     }
     
-    protected Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> buildTfFunction(ASTJexlScript script,
-                    SortedKeyValueIterator<Key,Value> source, SortedKeyValueIterator<Key,Value> secondSource) {
-        return TFFactory.getFunction(script, getContentExpansionFields(), getTermFrequencyFields(), this.getTypeMetadata(), super.equality,
-                        getEvaluationFilter(), source, secondSource, false);
+    protected Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> buildTfFunction(TermFrequencyConfig tfConfig) {
+        return TFFactory.getFunction(tfConfig);
     }
     
     private Range getDocumentRange(NestedQueryIterator<Key> documentSource) {
