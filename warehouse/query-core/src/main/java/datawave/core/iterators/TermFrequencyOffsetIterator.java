@@ -30,7 +30,7 @@ public class TermFrequencyOffsetIterator implements SortedKeyValueIterator<Key,V
     private Key tk = null;
     private Value tv = null;
     
-    // A set of full column qualifiers that describe the search space
+    // A set of full column qualifiers that describe the offset's exact location (datatype\0uid\0value\0FIELD)
     private final TreeSet<Text> searchSpace;
     
     private Range initialRange;
@@ -102,6 +102,15 @@ public class TermFrequencyOffsetIterator implements SortedKeyValueIterator<Key,V
         }
     }
     
+    /**
+     * Seek to the next known hit given our pre-built search space
+     * 
+     * @param key
+     *            the current tf key
+     * @return true if there are more hits to scan
+     * @throws IOException
+     *             if there is a problem while seeking
+     */
     private boolean seekToNextHit(Key key) throws IOException {
         Range seekRange = getNextSeekRange(key);
         if (seekRange == null)
@@ -110,6 +119,13 @@ public class TermFrequencyOffsetIterator implements SortedKeyValueIterator<Key,V
         return true;
     }
     
+    /**
+     * Given a TF key, find the next highest search space via column qualifier; the {datatype\0uid\0value\0FIELD}
+     * 
+     * @param key
+     *            the current tf key
+     * @return the next highest range as defined by the search space, or null if the search space is exhausted
+     */
     private Range getNextSeekRange(Key key) {
         Text nextCQ = searchSpace.higher(key.getColumnQualifier());
         if (nextCQ == null)

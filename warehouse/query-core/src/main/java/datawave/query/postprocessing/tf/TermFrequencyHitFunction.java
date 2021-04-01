@@ -580,7 +580,8 @@ public class TermFrequencyHitFunction {
             fields = parseField(args.get(0));
         }
         
-        // delayed = negated
+        // nodes under a delayed marker are not part of the field index lookup and do not have values in the document. Values from a content function delayed
+        // for any reason must be fetched by this function.
         boolean isNegated = isDelayed(function);
         if (isNegated) {
             this.hasNegatedFunctions = true;
