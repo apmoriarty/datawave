@@ -35,14 +35,11 @@ public class TFFactory {
     /**
      * Factory method for creating the TF function used for generating the map context.
      * 
-     * @param query
-     *            the query tree
+     * @param tfConfig
+     *            config object used to build this funciton
      * @param dataTypes
-     * @param sourceDeepCopy
-     *            a source copy used to fetch term frequencies
-     * @param secondSource
-     *            a source copy used to fetch delayed values from the field index (negated content function terms)
-     * @return
+     *            a mapping of datatypes
+     * @return a TermFrequency function
      */
     public static com.google.common.base.Function<Tuple2<Key,Document>,Tuple3<Key,Document,Map<String,Object>>> getFunction(TermFrequencyConfig tfConfig,
                     Multimap<String,Class<? extends Type<?>>> dataTypes) {
