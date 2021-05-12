@@ -68,7 +68,7 @@ public class RemoveExtraParensVisitor extends BaseVisitor {
     /**
      * Can remove a paren if a hierarchy exists like
      *
-     * RefExpr -> Ref -> RefExpr
+     * RefExpr -{@literal >} Ref -{@literal >} RefExpr
      *
      * @param node
      *            an ASTReferenceExpression node
@@ -85,11 +85,11 @@ public class RemoveExtraParensVisitor extends BaseVisitor {
     }
     
     /**
-     * A node is double wrapped if
+     * Returns true if two reference expression nodes exist adjacent to each other in the tree hierarchy
      * 
      * @param node
      *            a Jexl node
-     * @return true if a
+     * @return true if this node is double wrapped
      */
     private boolean isDoubleWrapped(JexlNode node) {
         if (node.jjtGetParent() != null && isReferenceExpression(node) && hasSingleChild(node)) {
@@ -100,7 +100,7 @@ public class RemoveExtraParensVisitor extends BaseVisitor {
                 JexlNode gc = child.jjtGetChild(0);
                 if (isReferenceExpression(gc) && hasSingleChild(gc)) {
                     
-                    // Sanity check to make sure we have something inside the parens
+                    // Confirm something exists within the parens
                     return gc.jjtGetNumChildren() > 0;
                 }
             }

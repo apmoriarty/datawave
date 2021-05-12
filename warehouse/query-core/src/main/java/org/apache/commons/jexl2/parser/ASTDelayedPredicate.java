@@ -44,8 +44,11 @@ public class ASTDelayedPredicate extends QueryPropertyMarker {
     }
     
     /**
+     * Wrap the provided node in an ASTDelayedPredicate
+     * 
      * @param node
-     * @return
+     *            the node to delay
+     * @return an ASTDelayedPredicate
      */
     public static JexlNode create(JexlNode node) {
         
@@ -65,7 +68,13 @@ public class ASTDelayedPredicate extends QueryPropertyMarker {
         return expr;
     }
     
-    // Recursively ascend the tree looking for an instance of an ASTDelayedPredicate intersected with a parent
+    /**
+     * Recursively ascend the tree looking for an instance of an ASTDelayedPredicate intersected with a parent
+     * 
+     * @param node
+     *            the node to check
+     * @return true if this node is delayed, or if a parent node is delayed
+     */
     public static boolean isSubTreeAlreadyDelayed(JexlNode node) {
         if (node instanceof ASTAndNode && node.jjtGetNumChildren() == 2) {
             for (int i = 0; i < node.jjtGetNumChildren(); i++) {
