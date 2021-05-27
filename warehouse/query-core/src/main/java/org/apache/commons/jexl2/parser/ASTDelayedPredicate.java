@@ -52,8 +52,8 @@ public class ASTDelayedPredicate extends QueryPropertyMarker {
      */
     public static JexlNode create(JexlNode node) {
         
-        // Do not delay and already-delayed sub tree
-        if (node instanceof ASTDelayedPredicate || ASTDelayedPredicate.isSubTreeAlreadyDelayed(node)) {
+        // Do not delay if this subtree is already delayed
+        if (instanceOf(node, ASTDelayedPredicate.class) || ASTDelayedPredicate.isSubTreeAlreadyDelayed(node)) {
             return node;
         }
         
