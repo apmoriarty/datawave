@@ -36,6 +36,7 @@ import org.apache.commons.jexl2.parser.ASTNENode;
 import org.apache.commons.jexl2.parser.ASTNRNode;
 import org.apache.commons.jexl2.parser.ASTNullLiteral;
 import org.apache.commons.jexl2.parser.ASTNumberLiteral;
+import org.apache.commons.jexl2.parser.ASTReference;
 import org.apache.commons.jexl2.parser.ASTReferenceExpression;
 import org.apache.commons.jexl2.parser.ASTReturnStatement;
 import org.apache.commons.jexl2.parser.ASTSizeFunction;
@@ -78,9 +79,32 @@ public class RemoveExtraParensVisitor extends BaseVisitor {
      */
     @Override
     public Object visit(ASTReferenceExpression node, Object data) {
-        while (isDoubleWrapped(node)) {
-            node = (ASTReferenceExpression) removeDoubleWrap(node);
+        
+        boolean changed;
+        do {
+            changed = false;
+            
+            if (isDoubleWrapped(node)) {
+                node = (ASTReferenceExpression) removeDoubleWrap(node);
+                changed = true;
+            }
+            
+            if (isDoubleReferenceExpression(node)) {
+                node = (ASTReferenceExpression) removeMiddleNode(node);
+                changed = true;
+            }
+        } while (changed);
+        
+        return super.visit(node, data);
+    }
+    
+    @Override
+    public Object visit(ASTReference node, Object data) {
+        
+        while (isDoubleReference(node)) {
+            node = (ASTReference) removeMiddleNode(node);
         }
+        
         return super.visit(node, data);
     }
     
@@ -109,7 +133,33 @@ public class RemoveExtraParensVisitor extends BaseVisitor {
     }
     
     /**
-     * Assumes {@link #isDoubleWrapped(JexlNode)} has validated that the incoming node is the start of a double paren
+     * Handles the case when two reference nodes exist in the tree hiearchy
+     * 
+     * @param node
+     * @return
+     */
+    private boolean isDoubleReference(JexlNode node) {
+        if (node.jjtGetParent() != null && isReference(node) && hasSingleChild(node)) {
+            
+            JexlNode child = node.jjtGetChild(0);
+            return isReference(child) && hasSingleChild(child);
+        }
+        return false;
+    }
+    
+    private boolean isDoubleReferenceExpression(JexlNode node) {
+        if (node.jjtGetParent() != null && isReferenceExpression(node) && hasSingleChild(node)) {
+            
+            JexlNode child = node.jjtGetChild(0);
+            return isReferenceExpression(child) && hasSingleChild(child);
+        }
+        return false;
+    }
+    
+    /**
+     * Assumes {@link #isDoubleWrapped(JexlNode)} has validated that the incoming node is the start of a double paren.
+     *
+     * Given a tree like A - B - C - D, remove nodes B and C to leave A - D
      * 
      * @param node
      *            a double wrapped Jexl node.
@@ -129,6 +179,21 @@ public class RemoveExtraParensVisitor extends BaseVisitor {
         child = null;
         
         return target;
+    }
+    
+    /**
+     * Given a tree like A - B - C, remove node B to leave A - C
+     *
+     * @return
+     */
+    private JexlNode removeMiddleNode(JexlNode node) {
+        JexlNode parent = node.jjtGetParent();
+        JexlNode child = node.jjtGetChild(0);
+        
+        JexlNodes.swap(parent, node, child);
+        node = null;
+        
+        return child;
     }
     
     private boolean hasSingleChild(JexlNode node) {
