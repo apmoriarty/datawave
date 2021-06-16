@@ -564,7 +564,7 @@ public class QueryIteratorIT extends EasyMockSupport {
         String query = "((_Value_ = true) && (EVENT_FIELD4 =~ '.*d'))";
         
         // setup a bogus ivarator cache dir for the config
-        options.put(IVARATOR_CACHE_DIR_CONFIG, IvaratorCacheDirConfig.toJson(new IvaratorCacheDirConfig("hdfs://bogusPath")));
+        options.put(IVARATOR_CACHE_DIR_CONFIG, IvaratorCacheDirConfig.toJson(new IvaratorCacheDirConfig("hddfs://bogusPath")));
         
         index_test(seekRange, query, false, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
     }
@@ -1221,6 +1221,16 @@ public class QueryIteratorIT extends EasyMockSupport {
     public void indexOnly_lazy_shardRange_test() throws IOException {
         Range seekRange = getDocumentRange(null);
         String query = "INDEX_ONLY_FIELD1 == 'apple' && filter:isNotNull(TF_FIELD4@LAZY_SET_FOR_INDEX_ONLY_FUNCTION_EVALUATION)";
+        indexOnly_test(seekRange, query, false, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
+    }
+    
+    // The term fetched by the delayed context is not added to the returned document.
+    @Test
+    public void test_fetchDelayedIndexOnlyTerm_addTermToHitTerms() throws IOException {
+        options.put(JexlEvaluation.HIT_TERM_FIELD, "true");
+        // build the seek range for a document specific pull
+        Range seekRange = getDocumentRange("123.345.456");
+        String query = "EVENT_FIELD1 == 'a' && ((_Delayed_ = true) && INDEX_ONLY_FIELD1 == 'apple')";
         indexOnly_test(seekRange, query, false, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
     }
     
