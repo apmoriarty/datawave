@@ -56,7 +56,7 @@ public class RemoveExtraParensVisitorTest {
         
         JexlNode removed = RemoveExtraParensVisitor.remove(a);
         
-        TreeEqualityVisitor.isEqual(JexlNodeFactory.createScript(expected), JexlNodeFactory.createScript(removed), new TreeEqualityVisitor.Reason());
+        assertTrue(TreeEqualityVisitor.isEqual(expected, removed));
     }
     
     @Test
@@ -77,7 +77,7 @@ public class RemoveExtraParensVisitorTest {
         
         JexlNode removed = RemoveExtraParensVisitor.remove(a);
         
-        TreeEqualityVisitor.isEqual(JexlNodeFactory.createScript(expected), JexlNodeFactory.createScript(removed), new TreeEqualityVisitor.Reason());
+        assertTrue(TreeEqualityVisitor.isEqual(expected, removed));
         
         assertLineage(removed);
     }
@@ -104,7 +104,7 @@ public class RemoveExtraParensVisitorTest {
         
         JexlNode removed = RemoveExtraParensVisitor.remove(a);
         
-        TreeEqualityVisitor.isEqual(JexlNodeFactory.createScript(expected), JexlNodeFactory.createScript(removed), new TreeEqualityVisitor.Reason());
+        assertTrue(TreeEqualityVisitor.isEqual(expected, removed));
         
         assertLineage(removed);
     }
