@@ -14,6 +14,7 @@ import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.security.Authorizations;
 
 import com.google.common.collect.Iterators;
+import org.apache.commons.lang.StringUtils;
 
 /**
  * <p>
@@ -46,6 +47,8 @@ public abstract class GenericQueryConfiguration {
     private Iterator<QueryData> queries = Iterators.emptyIterator();
     
     protected boolean bypassAccumulo;
+    private String accumuloPassword = "";
+    private String accumuloPasswordEnv = "";
     
     /**
      * Empty default constructor
@@ -165,6 +168,48 @@ public abstract class GenericQueryConfiguration {
     
     public void setBypassAccumulo(boolean bypassAccumulo) {
         this.bypassAccumulo = bypassAccumulo;
+    }
+    
+    /**
+     * @return - the accumulo password
+     */
+    public String getAccumuloPassword() {
+        return this.accumuloPassword;
+    }
+    
+    /**
+     * Sets configured password for accumulo access
+     *
+     * @param password
+     *            the password used to connect to accumulo
+     */
+    public void setAccumuloPassword(String password) {
+        this.accumuloPassword = password;
+    }
+    
+    /**
+     *
+     * @return the accumulo password env target
+     */
+    public String getAccumuloPasswordEnv() {
+        return accumuloPasswordEnv;
+    }
+    
+    /**
+     * Sets the accumulo password from the provided env target. The value set in the environment will always overwrite any preconfigured value.
+     *
+     * @param accumuloPasswordEnv
+     *            the environment variable where the accumulo password is stored
+     */
+    public void setAccumuloPasswordEnv(String accumuloPasswordEnv) {
+        this.accumuloPasswordEnv = accumuloPasswordEnv;
+        if (StringUtils.isNotBlank(accumuloPasswordEnv)) {
+            String password = System.getenv(accumuloPasswordEnv);
+            if (StringUtils.isNotBlank(password)) {
+                this.accumuloPassword = password;
+            }
+            password = null;
+        }
     }
     
     /**
