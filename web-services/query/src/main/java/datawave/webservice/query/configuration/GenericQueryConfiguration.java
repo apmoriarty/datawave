@@ -206,9 +206,8 @@ public abstract class GenericQueryConfiguration {
         if (StringUtils.isNotBlank(accumuloPasswordEnv)) {
             String password = System.getenv(accumuloPasswordEnv);
             if (StringUtils.isNotBlank(password)) {
-                this.accumuloPassword = password;
+                setAccumuloPassword(password);
             }
-            password = null;
         }
     }
     
