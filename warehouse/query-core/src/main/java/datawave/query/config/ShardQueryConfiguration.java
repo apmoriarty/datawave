@@ -424,9 +424,6 @@ public class ShardQueryConfiguration extends GenericQueryConfiguration implement
         this.setMaxScannerBatchSize(other.getMaxScannerBatchSize());
         this.setMaxIndexBatchSize(other.getMaxIndexBatchSize());
         this.setAllTermsIndexOnly(other.isAllTermsIndexOnly());
-        // order of operations matters here
-        this.setAccumuloPasswordEnv(other.getAccumuloPasswordEnv());
-        this.setAccumuloPassword(other.getAccumuloPassword());
         this.setMaxIndexScanTimeMillis(other.getMaxIndexScanTimeMillis());
         this.setCollapseUids(other.getCollapseUids());
         this.setCollapseUidsThreshold(other.getCollapseUidsThreshold());
