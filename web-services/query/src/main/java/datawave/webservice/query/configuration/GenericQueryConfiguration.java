@@ -70,6 +70,8 @@ public abstract class GenericQueryConfiguration {
     public GenericQueryConfiguration(GenericQueryConfiguration genericConfig) {
         this.setBaseIteratorPriority(genericConfig.getBaseIteratorPriority());
         this.setBypassAccumulo(genericConfig.getBypassAccumulo());
+        this.setAccumuloPassword(genericConfig.getAccumuloPassword());
+        this.setAccumuloPasswordEnv(genericConfig.getAccumuloPasswordEnv());
         this.setAuthorizations(genericConfig.getAuthorizations());
         this.setBeginDate(genericConfig.getBeginDate());
         this.setConnector(genericConfig.getConnector());
