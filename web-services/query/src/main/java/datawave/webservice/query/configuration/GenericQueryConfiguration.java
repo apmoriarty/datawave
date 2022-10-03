@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.Set;
 
 import datawave.util.TableName;
+import datawave.webservice.common.logging.ThreadConfigurableLogger;
 import datawave.webservice.query.logic.BaseQueryLogic;
 
 import org.apache.accumulo.core.client.BatchScanner;
@@ -15,6 +16,7 @@ import org.apache.accumulo.core.security.Authorizations;
 
 import com.google.common.collect.Iterators;
 import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
 
 /**
  * <p>
@@ -28,6 +30,9 @@ import org.apache.commons.lang.StringUtils;
  * 
  */
 public abstract class GenericQueryConfiguration {
+    
+    private static final Logger log = ThreadConfigurableLogger.getLogger(GenericQueryConfiguration.class);
+    
     private Connector connector = null;
     private Set<Authorizations> authorizations = Collections.singleton(Authorizations.EMPTY);
     // Leave in a top-level query for backwards-compatibility purposes
@@ -206,10 +211,17 @@ public abstract class GenericQueryConfiguration {
     public void setAccumuloPasswordEnv(String accumuloPasswordEnv) {
         this.accumuloPasswordEnv = accumuloPasswordEnv;
         if (StringUtils.isNotBlank(accumuloPasswordEnv)) {
+            if (log.isTraceEnabled()) {
+                log.trace("env target is: " + accumuloPasswordEnv);
+            }
             String password = System.getenv(accumuloPasswordEnv);
             if (StringUtils.isNotBlank(password)) {
+                log.trace("env target was resolved");
                 setAccumuloPassword(password);
+                return;
             }
+            
+            log.error("failed to resolve value from env target: " + accumuloPasswordEnv);
         }
     }
     
